@@ -62,6 +62,7 @@ TVB=$(valor TV_LOGIN_WEB_BASE_URL)
 TRK="_LVEA8lNibo-jFH7Z3z0t1OYOS0Qz-EHSWrVulFVt0M"
 SMK="${SIMKL_CLIENT_ID:-$(valor_lab_ou_web SIMKL_CLIENT_ID)}"
 SMA="${SIMKL_APP_NAME:-$(valor_lab_ou_web SIMKL_APP_NAME)}"
+[ -n "$SMA" ] || SMA="Better Nuvio"
 TMD=$(valor TMDB_API_KEY)
 # Credenciais privadas nunca entram no compilador nem no IPK. O Trakt troca
 # codigos no servidor; cada usuario informa sua propria chave do Seekr na TV.

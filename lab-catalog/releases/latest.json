@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.16",
-  "body": "## Segurança e contas\n- O novo IPK não contém o segredo OAuth do Trakt nem a chave compartilhada do Seekr. O pacote foi inspecionado após a compilação e seus 752 arquivos internos não contêm os valores privados antigos.\n- A troca e a renovação de tokens do Trakt passam por uma função autenticada no servidor. O aplicativo usa um novo identificador público; após a invalidação do aplicativo anterior, será necessário conectar o Trakt novamente.\n- O Seekr usa apenas a chave pessoal informada em Ajustes no dispositivo. A chave antiga não está no novo pacote.\n## Distribuição\n- O catálogo aponta apenas para o IPK 1.5.16. Pacotes antigos foram retirados da publicação corrente porque ainda continham as credenciais antigas.\n- A página de atualizações mostra a versão, as mudanças e o SHA-256 do download para conferência.\n",
+  "tag_name": "v1.5.17",
+  "body": "## Identidade e instalação\n- O Better Nuvio para LG webOS agora usa o ID com.betternuvio.app e o pacote com.betternuvio.app_1.5.17_arm.ipk. O serviço local de plugins acompanha esse novo ID.\n- A troca de ID faz o webOS instalar esta versão como outro aplicativo. Entre novamente na sua conta; os dados locais da instalação anterior não são copiados automaticamente. Depois de conferir que tudo funciona, você pode remover o aplicativo antigo pela TV.\n## Atualizações e contas\n- O app passa a consultar o catálogo e as notas em betternuvio.vercel.app. Os links do manifesto, do catálogo e da página de download apontam para este mesmo IPK.\n- O identificador público do Simkl permanece configurado. O segredo OAuth do Trakt continua no servidor e a chave Seekr é informada pelo usuário no dispositivo; nenhum dos dois é embutido no IPK.\n## Integridade do pacote\n- Pacote ARM recompilado e inspecionado: 51906958 bytes, SHA-256 51e73c1f47aef8fe65c830d2d59e2f9ea4c12f740be96c20ababfdcc488d032e.\n",
   "assets": [
     {
-      "name": "space.nuvio.native.enhanced.lab_1.5.16_arm.ipk",
-      "size": 52101560,
-      "digest": "sha256:603fff61f2379fc7a3d8d5c0baedaba49e8e84169deb11deb761064311277846",
-      "browser_download_url": "https://betternuvio.vercel.app/space.nuvio.native.enhanced.lab_1.5.16_arm.ipk"
+      "name": "com.betternuvio.app_1.5.17_arm.ipk",
+      "size": 51906958,
+      "digest": "sha256:51e73c1f47aef8fe65c830d2d59e2f9ea4c12f740be96c20ababfdcc488d032e",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.17_arm.ipk"
     }
   ]
 }

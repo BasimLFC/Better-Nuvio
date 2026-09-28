@@ -29,7 +29,7 @@ with open(ipk, 'rb') as f:
     for chunk in iter(lambda: f.read(1024 * 1024), b''):
         hash_ipk.update(chunk)
 
-base = 'https://nuvio-enhanced-lab-catalog.vercel.app'
+base = 'https://betternuvio.vercel.app'
 icone = f'{base}/icon.png'
 manifesto = {
     'id': app['id'],

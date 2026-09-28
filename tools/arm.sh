@@ -37,7 +37,7 @@ cd "$(dirname "$0")/.."
 
 TV_IP="${NUVIO_TV_IP:-}"
 TV_PASS="${NUVIO_TV_PASS:-}"
-APP_ID="space.nuvio.native.enhanced.lab"
+APP_ID="com.betternuvio.app"
 ARES="${NUVIO_ARES_PACKAGE:-$(command -v ares-package)}"
 
 # --high-cache pode vir antes ou depois de --build/--ipk. So muda uma -D e os
@@ -203,7 +203,7 @@ if [ "$1" = "--ipk" ]; then
   echo "==> empacotando (sem credenciais)"
   PALCO=$(mktemp -d); LIXO="$LIXO $PALCO"
   cp -R deploy/app "$PALCO/app"
-  cp -R plugin-service "$PALCO/space.nuvio.native.enhanced.lab.plugin"
+  cp -R plugin-service "$PALCO/com.betternuvio.app.plugin"
   # cache/ e cache de EXECUCAO, nao arte do pacote: sao megabytes de imagem
   # baixada que o app rebaixa sozinho.
   rm -rf "$PALCO/app/art/cache"
@@ -211,7 +211,7 @@ if [ "$1" = "--ipk" ]; then
   for g in $GLOB_DE_PESSOA; do rm -f "$PALCO"/app/art/$g; done
   for d in $DIR_DE_PESSOA; do rm -rf "$PALCO/app/art/$d"; done
 
-  "$ARES" "$PALCO/app" "$PALCO/space.nuvio.native.enhanced.lab.plugin" -o .
+  "$ARES" "$PALCO/app" "$PALCO/com.betternuvio.app.plugin" -o .
   IPK=$(ls -t ./*.ipk | head -1)
   # A variante ganha o nome no ARQUIVO: dois .ipk com o mesmo nome e md5
   # diferente e exatamente o que ja publicou build errada uma vez.

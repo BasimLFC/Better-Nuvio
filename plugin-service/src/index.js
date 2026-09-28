@@ -14,7 +14,7 @@ const MAX_BODY = 1024 * 1024;
 // A fonte nativa aguarda no maximo 70 s. Um provedor travado nao pode manter
 // os addons normais escondidos atras de uma busca de plugins de dois minutos.
 const FETCH_TIMEOUT = 15000;
-const serviceId = "space.nuvio.native.enhanced.lab.plugin";
+const serviceId = "com.betternuvio.app.plugin";
 const fetchServer = require("../runtime/plugin-http.cjs").createPluginHttpServer({port: FETCH_PORT});
 let service;
 try { service = new (require("webos-service"))(serviceId); }

@@ -301,7 +301,7 @@ int plugins_consultar(const char *imdb, const char *tipo, Stream **saida) {
       // O app empacotado roda sem root. Na TV, /usr/bin/luna-send e executavel
       // apenas por root; o barramento publico usa luna-send-pub. O comando
       // privado falhava em silencio e o executor nunca iniciava.
-      int tentativa, ping=system("/usr/bin/luna-send-pub -n 1 -f luna://space.nuvio.native.enhanced.lab.plugin/ping '{}' >/dev/null 2>&1");
+      int tentativa, ping=system("/usr/bin/luna-send-pub -n 1 -f luna://com.betternuvio.app.plugin/ping '{}' >/dev/null 2>&1");
       for(tentativa=0;tentativa<3 && !iniciou;tentativa++) {
         health=rede_baixar("http://127.0.0.1:2732/health",2);
         iniciou=health && !strcmp(health,"ok"); free(health);

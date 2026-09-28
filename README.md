@@ -14,7 +14,7 @@ O [site de atualizações](https://betternuvio.vercel.app/) mostra as notas e o 
 
 ## Código-fonte
 
-Este repositório é um snapshot limpo do código atual do Better Nuvio. Ele não contém o histórico Git local, chaves, tokens, contas, configurações pessoais, pacotes IPK ou binários gerados. O IPK 1.5.16 é publicado pelo catálogo. O segredo OAuth do Trakt fica apenas no ambiente do servidor; o Seekr usa uma chave pessoal configurada no dispositivo.
+Este repositório é um snapshot limpo do código atual do Better Nuvio. Ele não contém o histórico Git local, chaves, tokens, contas, configurações pessoais, pacotes IPK ou binários gerados. O IPK 1.5.17 é publicado pelo catálogo. O segredo OAuth do Trakt fica apenas no ambiente do servidor; o Seekr usa uma chave pessoal configurada no dispositivo.
 
 Os componentes principais estão em `src/` (cliente nativo), `deploy/app/` (recursos), `plugin-service/` (executor local), `tools/` (build) e `tests/`. Para compilar no Mac, use `bash tools/mac.sh`; para LG, `bash tools/arm.sh --ipk`. Consulte [as notas de compilação](docs/ORIGINAL_BUILD_NOTES.md) para dependências e variáveis locais. Os arquivos de conta são criados localmente e não são distribuídos.
 

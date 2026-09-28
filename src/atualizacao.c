@@ -35,9 +35,9 @@
 #define NV_VERSAO "dev"
 #endif
 
-#define AT_URL   "https://nuvio-enhanced-lab-catalog.vercel.app/releases/latest.json"
+#define AT_URL   "https://betternuvio.vercel.app/releases/latest.json"
 #define AT_ARQ   "atualizacao-vista.txt"
-#define AT_PAGINA "https://nuvio-enhanced-lab-catalog.vercel.app/apps.json"
+#define AT_PAGINA "https://betternuvio.vercel.app/apps.json"
 #define AT_APPID  NV_APP_ID
 #define AT_LUNA_PUB "/usr/bin/luna-send-pub"
 #define AT_LOG_INST "/tmp/nuvio-instalar.log"
