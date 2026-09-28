@@ -18,9 +18,11 @@ O IPK não é enviado ao GitHub. Por isso, o `vercel.json` da raiz desativa a im
 
 ## Código-fonte
 
-Este repositório é um snapshot limpo do código atual do Better Nuvio. Ele não contém o histórico Git local, chaves, tokens, contas, configurações pessoais, pacotes IPK ou binários gerados. O IPK 1.5.20 é publicado pelo catálogo. O segredo OAuth do Trakt fica apenas no ambiente do servidor; o Seekr usa uma chave pessoal configurada no dispositivo.
+Este repositório é um snapshot limpo do código atual do Better Nuvio. Ele não contém o histórico Git local, chaves, tokens, contas, configurações pessoais, pacotes IPK ou binários gerados. O IPK 1.5.21 é publicado pelo catálogo. O segredo OAuth do Trakt fica apenas no ambiente do servidor; o Seekr usa uma chave pessoal configurada no dispositivo.
 
 Os componentes principais estão em `src/` (cliente nativo), `deploy/app/` (recursos), `plugin-service/` (executor local), `tools/` (build) e `tests/`. Para compilar no Mac, use `bash tools/mac.sh`; para LG, `bash tools/arm.sh --ipk`. Consulte [as notas de compilação](docs/ORIGINAL_BUILD_NOTES.md) para dependências e variáveis locais. Os arquivos de conta são criados localmente e não são distribuídos.
+
+O player precisa dos arquivos locais `NetflixSans-Regular.otf` e `NetflixSans-Medium.otf` em `deploy/app/fonts` para manter a tipografia das legendas. Eles não fazem parte do repositório; os scripts de compilação recusam um pacote sem esses arquivos, evitando substituição silenciosa da fonte.
 
 ## Créditos
 

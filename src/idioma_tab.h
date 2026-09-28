@@ -704,6 +704,7 @@
   { "Em pausa", "On hold" },
   { "Em produção", "In production" },
   { "Em produção · sem data anunciada", "In production · no date announced" },
+  { "Embutidas", "Embedded" },
   { "Emissora", "Network" },
   { "Encerrada", "Ended" },
   { "Encontre as fontes MP4 direto na lista de reprodução.", "Find MP4 sources directly in the playback list." },

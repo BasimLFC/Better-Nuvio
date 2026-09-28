@@ -21,7 +21,7 @@
 #define FX_LINHA   76.0f
 #define FX_X       1216.0f
 #define FX_W       640.0f
-#define FX_MAX_GRUPOS (NV_FAIXA_MAX + LEG_MAX + 1)
+#define FX_MAX_GRUPOS (LEG_MAX + 2)
 
 static int aberta, coluna, foco[3];
 // Rolagem do audio e do estilo; idiomas e opcoes de legenda tem janelas proprias.
@@ -191,27 +191,43 @@ typedef struct { char codigo[32]; char nome[72]; int total; } FxGrupo;
 static FxGrupo grupos[FX_MAX_GRUPOS];
 static int nGrupos;
 
-static const char *idiomaFaixa(int i) {
-  int emb = video_n_legenda();
-  if (i < emb) {
-    const VideoFaixa *f = video_legenda(i);
-    return f ? f->idioma : "";
+static int prioridadeGrupo(const FxGrupo *grupo) {
+  const char *primeiro = ling_legenda(), *segundo = ling_legenda2();
+  if (primeiro && *primeiro && strcasecmp(primeiro, "none")) {
+    if (!strcasecmp(grupo->codigo, ling_grupo_codigo(primeiro))) return 0;
+    if (ling_casa(grupo->codigo, primeiro)) return 1;
   }
-  const Legenda *l = addons_legenda(i - emb);
-  return l ? l->idioma : "";
+  if (segundo && *segundo && strcasecmp(segundo, "none")) {
+    if (!strcasecmp(grupo->codigo, ling_grupo_codigo(segundo))) return 2;
+    if (ling_casa(grupo->codigo, segundo)) return 3;
+  }
+  return !strcmp(grupo->codigo, "und") ? 5 : 4;
 }
 
 static void montarGrupos(void) {
+  char focoAnterior[32] = "";
+  if (focoIdioma >= 0 && focoIdioma < nGrupos)
+    snprintf(focoAnterior, sizeof focoAnterior, "%s", grupos[focoIdioma].codigo);
   nGrupos = 1;
   memset(grupos, 0, sizeof grupos);
   snprintf(grupos[0].nome, sizeof grupos[0].nome, "%s", i18n("Desativada"));
-  for (int i = 0; i < video_n_legenda() + addons_n_legendas(); i++) {
-    const char *cod = idiomaFaixa(i);
+  if (video_n_legenda() > 0) {
+    snprintf(grupos[1].codigo, sizeof grupos[1].codigo, "embedded");
+    snprintf(grupos[1].nome, sizeof grupos[1].nome, "%s", i18n("Embutidas"));
+    grupos[1].total = video_n_legenda();
+    nGrupos++;
+  }
+  for (int i = 0; i < addons_n_legendas(); i++) {
+    const Legenda *l = addons_legenda(i);
+    const char *cod = l ? l->idioma : "";
     if (!cod || !*cod) cod = "und";
-    if (!ling_legenda_visivel(cod)) continue;
+    // O filtro de favoritos limita as buscas externas. A faixa selecionada
+    // permanece visivel para que a folha nunca pareca ter perdido a selecao.
+    if (!ling_legenda_visivel(cod) && video_n_legenda() + i != legendaAtiva()) continue;
     cod = ling_grupo_codigo(cod);
     int g;
-    for (g = 1; g < nGrupos; g++) if (!strcasecmp(grupos[g].codigo, cod)) break;
+    for (g = video_n_legenda() > 0 ? 2 : 1; g < nGrupos; g++)
+      if (!strcasecmp(grupos[g].codigo, cod)) break;
     if (g == nGrupos) {
       if (nGrupos >= FX_MAX_GRUPOS) continue;
       snprintf(grupos[g].codigo, sizeof grupos[g].codigo, "%s", cod);
@@ -221,21 +237,44 @@ static void montarGrupos(void) {
     }
     grupos[g].total++;
   }
+  // Desativada, Embutidas, idiomas preferidos e depois os demais em ordem
+  // alfabetica. Desconhecido fica no fim.
+  for (int i = video_n_legenda() > 0 ? 2 : 1; i < nGrupos; i++) {
+    FxGrupo atual = grupos[i];
+    int j = i;
+    while (j > (video_n_legenda() > 0 ? 2 : 1)) {
+      int pa = prioridadeGrupo(&atual), pb = prioridadeGrupo(&grupos[j-1]);
+      if (pa > pb || (pa == pb && strcasecmp(atual.nome, grupos[j-1].nome) >= 0)) break;
+      grupos[j] = grupos[j-1];
+      j--;
+    }
+    grupos[j] = atual;
+  }
+  if (focoAnterior[0])
+    for (int g = 0; g < nGrupos; g++)
+      if (!strcmp(focoAnterior, grupos[g].codigo)) { focoIdioma = g; break; }
+  if (focoIdioma >= nGrupos) focoIdioma = nGrupos - 1;
 }
 
 static int grupoDaFaixa(int i) {
+  const Legenda *l;
   const char *cod;
   if (i < 0) return 0;
-  cod = idiomaFaixa(i);
+  if (i < video_n_legenda()) return video_n_legenda() > 0 ? 1 : 0;
+  l = addons_legenda(i - video_n_legenda());
+  cod = l ? l->idioma : "";
   if (!cod || !*cod) cod = "und";
   cod = ling_grupo_codigo(cod);
-  for (int g = 1; g < nGrupos; g++) if (!strcasecmp(grupos[g].codigo, cod)) return g;
+  for (int g = video_n_legenda() > 0 ? 2 : 1; g < nGrupos; g++)
+    if (!strcasecmp(grupos[g].codigo, cod)) return g;
   return 0;
 }
 
 static int faixaDaOpcao(int grupo, int opcao) {
   if (grupo <= 0 || grupo >= nGrupos) return -1;
-  for (int i = 0; i < video_n_legenda() + addons_n_legendas(); i++) {
+  if (video_n_legenda() > 0 && grupo == 1)
+    return opcao >= 0 && opcao < video_n_legenda() ? opcao : -1;
+  for (int i = video_n_legenda(); i < video_n_legenda() + addons_n_legendas(); i++) {
     if (grupoDaFaixa(i) != grupo) continue;
     if (opcao-- == 0) return i;
   }
@@ -590,8 +629,7 @@ void faixas_evento(const SDL_Event *e) {
     return;
   }
   montarGrupos();
-  if (focoIdioma >= nGrupos) focoIdioma = nGrupos - 1;
-  if (grupoDaFaixa(legendaAtiva()) == 0) focoOpcoes = 0;
+  if (focoIdioma <= 0 || !grupos[focoIdioma].total) focoOpcoes = 0;
   if (k == SDLK_AC_BACK || k == SDLK_ESCAPE || k == SDLK_BACKSPACE) {
     if (paginaEstilo || paginaMix) {
       paginaEstilo = paginaMix = 0;
@@ -652,20 +690,20 @@ void faixas_evento(const SDL_Event *e) {
     if (focoOpcoes) {
       if (focoOpcao > 0) focoOpcao--;
       else focoOpcoes = 0;
-    } else if (focoIdioma > 0) focoIdioma--;
+    } else if (focoIdioma > 0) { focoIdioma--; focoOpcao = rolagemOpcao = 0; }
     else focoCabecalho = 1;
   } else if (k == SDLK_DOWN) {
     if (focoOpcoes) {
-      int g = grupoDaFaixa(legendaAtiva());
-      if (g > 0 && focoOpcao < grupos[g].total - 1) focoOpcao++;
-    } else if (focoIdioma < nGrupos - 1) focoIdioma++;
-    else if (grupoDaFaixa(legendaAtiva()) > 0) focoOpcoes = 1;
+      if (focoIdioma > 0 && focoOpcao < grupos[focoIdioma].total - 1) focoOpcao++;
+    } else if (focoIdioma < nGrupos - 1) {
+      focoIdioma++; focoOpcao = rolagemOpcao = 0;
+    } else if (focoIdioma > 0) focoOpcoes = 1;
   } else if (k == SDLK_RIGHT) {
-    if (grupoDaFaixa(legendaAtiva()) > 0) focoOpcoes = 1;
+    if (focoIdioma > 0) focoOpcoes = 1;
   } else if (k == SDLK_LEFT) focoOpcoes = 0;
   else if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_SPACE) {
     int faixa;
-    if (focoOpcoes) faixa = faixaDaOpcao(grupoDaFaixa(legendaAtiva()), focoOpcao);
+    if (focoOpcoes) faixa = faixaDaOpcao(focoIdioma, focoOpcao);
     else faixa = focoIdioma ? faixaDaOpcao(focoIdioma, 0) : -1;
     if (faixa >= -1 && (faixa >= 0 || !focoIdioma)) {
       foco[1] = faixa + 1;
@@ -892,7 +930,7 @@ void faixas_desenhar(Uint32 agora) {
   montarGrupos();
   ativoGrupo = grupoDaFaixa(legendaAtiva());
   if (focoIdioma >= nGrupos) focoIdioma = nGrupos - 1;
-  if (modo) h = paginaEstilo || ativoGrupo > 0 ? 850 : 152 + nGrupos*FX_LINHA;
+  if (modo) h = paginaEstilo || focoIdioma > 0 ? 850 : 152 + nGrupos*FX_LINHA;
   else h = paginaMix ? 340 : 260 + (nAudio > 2 ? (nAudio-2)*FX_LINHA : 0);
   if (h > (modo ? 850 : 720)) h = modo ? 850 : 720;
   y = 1024 - h;
@@ -1000,7 +1038,7 @@ void faixas_desenhar(Uint32 agora) {
                 180,180,180,contentX+20,inicio+22,contentW-40,28,a,2);
     return;
   }
-  int linguaVis = (int)((ativoGrupo > 0 ? 300.f : fim-inicio)/FX_LINHA);
+  int linguaVis = (int)((focoIdioma > 0 ? 300.f : fim-inicio)/FX_LINHA);
   if (linguaVis < 1) linguaVis = 1;
   if (linguaVis > nGrupos) linguaVis = nGrupos;
   rolagemIdioma = rolarPara(focoIdioma,nGrupos,linguaVis,rolagemIdioma);
@@ -1015,17 +1053,17 @@ void faixas_desenhar(Uint32 agora) {
                 g==ativoGrupo,0,a);
   }
   gfx_sem_recorte();
-  if (ativoGrupo <= 0) return;
+  if (focoIdioma <= 0) return;
   float optsY = inicio+linguaH+28;
   gfx_cor((GfxRect){contentX+8,optsY-14,contentW-16,1},0,1,1,1,.14f*a);
   int optsVis = (int)((fim-optsY)/FX_LINHA);
   if (optsVis < 1) optsVis = 1;
-  if (focoOpcao >= grupos[ativoGrupo].total) focoOpcao = grupos[ativoGrupo].total-1;
+  if (focoOpcao >= grupos[focoIdioma].total) focoOpcao = grupos[focoIdioma].total-1;
   if (focoOpcao < 0) focoOpcao = 0;
-  rolagemOpcao = rolarPara(focoOpcao,grupos[ativoGrupo].total,optsVis,rolagemOpcao);
+  rolagemOpcao = rolarPara(focoOpcao,grupos[focoIdioma].total,optsVis,rolagemOpcao);
   gfx_recorte(contentX,optsY,contentW,fim-optsY);
-  for (int o=rolagemOpcao; o<grupos[ativoGrupo].total && o<rolagemOpcao+optsVis; o++) {
-    int i = faixaDaOpcao(ativoGrupo,o);
+  for (int o=rolagemOpcao; o<grupos[focoIdioma].total && o<rolagemOpcao+optsVis; o++) {
+    int i = faixaDaOpcao(focoIdioma,o);
     const char *marca = NULL, *rot = rotuloLegenda(i,&marca);
     if (!marca) marca = i < video_n_legenda() ? i18n("Incorporada") : "OpenSubtitles";
     linhaPainel(contentX,optsY+(o-rolagemOpcao)*FX_LINHA,contentW,

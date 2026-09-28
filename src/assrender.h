@@ -28,9 +28,8 @@ int  assrender_adicionar_fonte(const char *nome, const void *dados, size_t taman
  * Mantem os bitmaps de contorno/sombra e os tempos de karaoke produzidos pelo
  * libass. enabled=0 preserva todas as cores do arquivo ASS. */
 void assrender_definir_cor(int enabled, int r, int g, int b);
-// Aplica as preferencias do player as falas ASS, usando a mesma tipografia,
-// cor, fundo e posicao das legendas SRT. Placas e efeitos permanecem no estilo
-// do arquivo. corRgb usa 0xRRGGBB; fundo vai de 0 a 4.
+// Aplica tipografia, cor, fundo e posicao da folha as falas ASS. Placas e
+// efeitos posicionados continuam com a composicao do arquivo.
 void assrender_definir_estilo(int negrito, int sombra, int corRgb,
                               int fundo, int posicao);
 

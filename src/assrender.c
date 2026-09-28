@@ -260,7 +260,7 @@ static void ass_aplicar_estilo_locked(void) {
       ((unsigned)r << 24) | ((unsigned)g << 16) | ((unsigned)b << 8);
   estilo.OutlineColour = 0x00000000u;
   estilo.BackColour = (unsigned)fundoAlpha;
-  estilo.Bold = 0;
+  // Nao zerar Italic/Underline/StrikeOut: isso apagava a enfase do arquivo.
   estilo.BorderStyle = assFundoDialogo ? 3 : 1;
   estilo.Outline = 0.0;
   estilo.Shadow = assSombra ? 2.0 : 0.0;
@@ -270,8 +270,7 @@ static void ass_aplicar_estilo_locked(void) {
   ass_set_selective_style_override(assRenderer, &estilo);
   ass_set_selective_style_override_enabled(assRenderer,
       ASS_OVERRIDE_BIT_FONT_NAME | ASS_OVERRIDE_BIT_FONT_SIZE_FIELDS |
-      ASS_OVERRIDE_BIT_COLORS | ASS_OVERRIDE_BIT_ATTRIBUTES |
-      ASS_OVERRIDE_BIT_BORDER | ASS_OVERRIDE_BIT_ALIGNMENT |
+      ASS_OVERRIDE_BIT_COLORS | ASS_OVERRIDE_BIT_BORDER | ASS_OVERRIDE_BIT_ALIGNMENT |
       ASS_OVERRIDE_BIT_MARGINS);
 }
 

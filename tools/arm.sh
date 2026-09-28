@@ -34,6 +34,14 @@ set -e
 cd "$(dirname "$0")/.."
 # tools/env.sh encontra a configuracao existente; NUVIO_PROPERTIES pode
 # selecionar outro arquivo explicitamente.
+if [ "${1:-}" = "--ipk" ] || [ "${2:-}" = "--ipk" ] || [ "${3:-}" = "--ipk" ]; then
+  for face in Regular Medium; do
+    [ -s "deploy/app/fonts/NetflixSans-$face.otf" ] || {
+      echo "Falta NetflixSans-$face.otf em deploy/app/fonts; IPK sem ela trocaria a legenda por outra fonte" >&2
+      exit 2
+    }
+  done
+fi
 
 TV_IP="${NUVIO_TV_IP:-}"
 TV_PASS="${NUVIO_TV_PASS:-}"

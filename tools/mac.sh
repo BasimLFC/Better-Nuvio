@@ -14,6 +14,12 @@ set -e
 cd "$(dirname "$0")/.."
 # tools/env.sh encontra a configuracao existente; NUVIO_PROPERTIES pode
 # selecionar outro arquivo explicitamente.
+for face in Regular Medium; do
+  [ -s "deploy/app/fonts/NetflixSans-$face.otf" ] || {
+    echo "Falta NetflixSans-$face.otf em deploy/app/fonts; o player nao exibiria a fonte escolhida" >&2
+    exit 2
+  }
+done
 tools/env.sh --require-core >/dev/null
 ENV_D=$(tools/env.sh)
 if ! pkg-config --exists libavformat libavcodec libavutil libswscale libswresample; then

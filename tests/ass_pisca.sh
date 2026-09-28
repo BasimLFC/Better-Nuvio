@@ -6,6 +6,12 @@ cd "$(dirname "$0")/.."
 if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists libass; then
   echo "ass_pisca: libass ausente (teste ignorado)"; exit 0
 fi
+for face in Regular Medium; do
+  [ -s "deploy/app/fonts/NetflixSans-$face.otf" ] || {
+    echo "ass_pisca: falta NetflixSans-$face.otf; o teste passaria usando outra fonte" >&2
+    exit 1
+  }
+done
 cc -DNV_ASS_LIBASS -include tests/ass_pisca_gl.h -Isrc tests/ass_pisca.c src/assrender.c \
   -o /tmp/nuvio-ass-pisca-test \
   $(pkg-config --cflags --libs libass) -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 \

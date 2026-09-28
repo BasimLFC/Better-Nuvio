@@ -1,9 +1,8 @@
 // Paineis de AUDIO e LEGENDA abertos pelos respectivos icones do player.
 // Legendas agrupa as faixas por idioma e oferece estilo em pagina separada.
 //
-// A lista de legendas junta as EMBUTIDAS no arquivo (o pipeline as enxerga) com
-// as do OpenSubtitles (baixadas pelo addon). Sao coisas diferentes na origem e
-// a mesma coisa para quem assiste, entao aparecem juntas, marcadas.
+// No seletor, as faixas embutidas ficam juntas em "Embutidas"; legendas de
+// addons sao agrupadas por idioma, com as preferencias antes das demais.
 #ifndef NV_FAIXAS_H
 #define NV_FAIXAS_H
 #include <SDL2/SDL.h>

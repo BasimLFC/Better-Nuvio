@@ -3,6 +3,7 @@
 *.wgt
 /nuvio-proto*
 /deploy/app/nuvio-proto
+/deploy/app/fonts/NetflixSans-*.otf
 /deploy/app/art/cache/
 /deploy/app/art/*.txt
 /deploy/app/art/*.bin

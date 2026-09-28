@@ -100,9 +100,12 @@ int main(int argc, char **argv) {
   mkvass_parar(); esperarFio(); legenda_desligar();
 
   mkvass_iniciar_ordinal(argv[1], 1);
-  colher(10);
-  ok(mkvass_estado() == MKVASS_NOGO_FAIXA, "ordinal 1 (SRT) e no-go de codec, volta a TV");
-  mkvass_parar(); esperarFio();
+  ok(colher(30) == MKVASS_COMPLETO, "ordinal 1 (TrackNumber 4, SRT) completa no app");
+  ok(cueCom(0, "Faixa B 0") && cueCom(11, "Faixa B 11"),
+     "falas da Faixa B, primeira e ultima");
+  ok(!cueCom(3, "Faixa A") && !cueCom(3, "Faixa C"),
+     "nenhuma fala das faixas ASS vizinhas");
+  mkvass_parar(); esperarFio(); legenda_desligar();
 
   printf("\n%s (%d falha%s)\n", falhas ? "FALHOU" : "tudo ok", falhas, falhas == 1 ? "" : "s");
   return falhas ? 1 : 0;

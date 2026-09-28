@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.20",
-  "body": "## Temporadas e fontes de Monstros\n- Os cards de Ed Gein, Irmãos Menendez e Lizzie Borden agora consultam a antologia Monstros com o ID de série usado pelos add-ons. Eles abrem nas temporadas 3, 2 e 4, respectivamente. O arco de Dahmer corresponde à temporada 1.\n- Cada card conserva o próprio título, imagem e descrição. A lista de temporadas e episódios vem da série principal, e o pedido de fontes inclui o episódio selecionado da temporada correta.\n- Ao retomar ou trocar de episódio, o player renova a lista de fontes para aquele episódio. O progresso assistido também usa a identidade da série principal.\n## Catálogos com IDs próprios\n- Séries identificadas por IDs como tmdb: ou tvdb: agora tentam obter a lista de episódios do add-on de metadados configurado. O ID completo é preservado ao consultar a ficha, sem cortar o prefixo.\n- Quando a ficha informa um IMDb válido, o app usa esse ID para consultar fontes e progresso. A resolução pelo TMDB considera se a obra é série ou filme e recusa uma ficha de outro IMDb.\n## Instalação e verificação\n- O IPK 1.5.20 mantém o ID com.betternuvio.app e atualiza a instalação anterior com esse mesmo ID. Os testes cobriram os quatro arcos da antologia, o carregamento de episódios por add-on e a compilação para Mac e LG webOS.\n- A presença de fontes para cada episódio depende dos add-ons instalados. O pacote foi conferido para não incluir arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas.\n",
+  "tag_name": "v1.5.21",
+  "body": "## Legendas com a tipografia escolhida\n- O IPK anterior não continha os arquivos locais da Netflix Sans. Por isso, o libass recorria à Helvetica mesmo com Netflix Sans selecionada. Este pacote inclui os pesos Regular e Medium; a compilação agora falha se qualquer um deles estiver ausente.\n- Falas de legendas externas e de faixas de texto embutidas usam a fonte, a cor, o tamanho, o fundo e a posição escolhidos no player. As faixas ASS mantêm itálico e outros destaques do próprio texto, além de preservar placas e efeitos posicionados.\n- A extração de MKV foi verificada com faixas ASS e SRT embutidas. Formatos de imagem e caminhos em que o dispositivo só fornece a legenda pela TV continuam sujeitos ao renderizador nativo.\n## Idiomas mais fáceis de encontrar\n- O seletor agora mostra Desativada e Embutidas separadamente. As legendas obtidas pelos add-ons ficam por idioma: primeiro os idiomas preferidos, depois os demais em ordem alfabética e por último as faixas sem idioma identificado.\n- A lista à direita acompanha o idioma em foco ao navegar com o controle. Uma legenda externa já selecionada continua visível mesmo quando o filtro de idiomas favoritos está ativo.\n## Atualização e conferência\n- O IPK 1.5.21 mantém o ID com.betternuvio.app e substitui a versão anterior com o mesmo ID. O pacote e o catálogo apontam para o mesmo arquivo e SHA-256.\n- Os testes cobriram a seleção de idiomas, a extração das três faixas de um MKV com ASS e SRT, a aplicação da fonte Netflix Sans pelo libass e a compilação para LG webOS e Mac. A presença de fontes de vídeo ainda depende dos add-ons instalados.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.20_arm.ipk",
-      "size": 51908842,
-      "digest": "sha256:e1fec011bb8aa538b4bc01a0400ad9a02ae506879bac3d7d57924eac3131b326",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.20_arm.ipk"
+      "name": "com.betternuvio.app_1.5.21_arm.ipk",
+      "size": 52074042,
+      "digest": "sha256:11694d9f70d1513dd8c44173d2491ad41588278e3261600d4ce0307a8e5a24fd",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.21_arm.ipk"
     }
   ]
 }
