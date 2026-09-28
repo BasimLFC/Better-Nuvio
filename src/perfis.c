@@ -1,0 +1,609 @@
+#include "perfis.h"
+#include "sessao.h"
+#include "nuvem.h"
+#include "dados.h"
+#include "fileiras.h"   /* fil_definir_perfil: a escolha de fileiras e por perfil */
+// fontepref_definir_perfil DECLARADA A MAO, e nao por #include: fontepref.h
+// puxa streams.h, que puxa SDL, e tests/perfilsel.sh compila perfis.c SOZINHO
+// (com js.c e jsw.c) exatamente para provar que a regra de perfil nao depende
+// de SDL nem de rede. Um include aqui quebraria esse teste sem que nada nesta
+// tela tivesse mudado. A fonte lembrada e por perfil pela mesma razao que as
+// fileiras sao — ver fontepref.h.
+void fontepref_definir_perfil(int perfil);
+// Mesma razao (arteescolha.h nao puxa SDL, mas fica no mesmo molde).
+void arteesc_definir_perfil(int perfil);
+#include "js.h"
+#include "jsw.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdatomic.h>
+
+#define ARQ_ATIVO "perfil.txt"
+#define ARQ_LISTA "perfis.txt"
+
+static ContaPerfil lista[CONTA_PERFIL_MAX];
+static int n;
+static char dono[64];
+static int ativo = 1;
+// ESCOLHIDO E DE SESSAO, GRAVADO E DE DISCO — e a diferenca entre as duas e a
+// mudanca de comportamento inteira desta tela.
+//
+// Antes so existia `escolhido`, e perfis_carregar_ativo() o ligava ao ler
+// perfil.txt: a tela aparecia UMA VEZ POR INSTALACAO e nunca mais. Numa TV de
+// sala isso significa que quem liga o aparelho herda em silencio o perfil de
+// quem o desligou — e como `p_profile_id` vai em quase toda RPC, o app passa a
+// ESCREVER progresso no perfil da outra pessoa sem nunca ter perguntado.
+//
+// Agora `escolhido` zera a cada arranque (a pergunta vale uma vez por sessao) e
+// `gravado` guarda que existe uma resposta de ontem — que e o que permite ao
+// Voltar dispensar a tela sem escolher nada, e o que faz o cursor nascer no
+// perfil certo.
+static int escolhido;      // 1 depois que o usuario decidiu NESTA sessao
+static int gravado;        // 1 quando perfil.txt existia no arranque
+
+static void lerDono(void) {
+  char *r;
+  int st = 0;
+  if (dono[0]) return;
+  r = sessao_rpc("get_sync_owner", "{}", &st);
+  if (r && st >= 200 && st < 300) {
+    // MEDIDO: a resposta e uma string JSON CRUA — "441bf572-…" — e nao um
+    // objeto. js_texto nao serve aqui; o valor esta entre as aspas do corpo
+    // inteiro.
+    const char *a = strchr(r, '"');
+    const char *b = a ? strchr(a + 1, '"') : NULL;
+    if (a && b && b > a + 1 && (size_t)(b - a - 1) < sizeof dono) {
+      memcpy(dono, a + 1, (size_t)(b - a - 1));
+      dono[b - a - 1] = 0;
+    }
+  }
+  free(r);
+  if (!dono[0]) {
+    // Sem o dono, a leitura da tabela de addons nao tem por quem filtrar. Cair
+    // no `sub` do token e a aproximacao correta: numa conta que nao e
+    // compartilhada os dois sao a mesma coisa.
+    snprintf(dono, sizeof dono, "%s", sessao_usuario());
+    printf("[perfis] get_sync_owner nao respondeu; usando o sub do token\n");
+  }
+}
+
+// --- CACHE EM DISCO DA LISTA -------------------------------------------------
+//
+// Uma linha por perfil, campos separados por TAB:
+//
+//   indice \t temPin \t primario \t usaAddons \t corHex \t nome \t avatar \t fundo
+//
+// Formato de linha e nao JSON de proposito: e o mesmo estilo de perfil.txt e
+// progresso.txt, nao precisa do leitor de JSON no caminho do arranque, e um
+// arquivo truncado pela metade custa UMA linha, nao o arquivo inteiro.
+//
+// O TAB e o separador porque nenhum dos campos pode conte-lo: a gravacao troca
+// tab e quebra de linha por espaco antes de escrever. Sem isso um nome de
+// perfil com um tab dentro deslocaria todos os campos seguintes.
+static void limpo(char *dst, size_t tam, const char *src) {
+  size_t i = 0;
+  if (!tam) return;
+  for (; src && src[i] && i + 1 < tam; i++)
+    dst[i] = (src[i] == '\t' || src[i] == '\n' || src[i] == '\r') ? ' ' : src[i];
+  dst[i] = 0;
+}
+
+static void gravarCache(void) {
+  // 8 perfis x (2 URLs de 300 + nome + cor + quatro numeros) cabe com folga.
+  char buf[8192];
+  size_t p = 0;
+  int i;
+  if (n <= 0) return;
+  for (i = 0; i < n && p < sizeof buf; i++) {
+    char nome[64], av[300], fu[300], cor[10], aid[64];
+    limpo(nome, sizeof nome, lista[i].nome);
+    limpo(av, sizeof av, lista[i].avatarUrl);
+    limpo(fu, sizeof fu, lista[i].fundoUrl);
+    limpo(cor, sizeof cor, lista[i].corHex);
+    limpo(aid, sizeof aid, lista[i].avatarId);
+    p += (size_t)snprintf(buf + p, sizeof buf - p, "%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%d\t%s\n",
+                          lista[i].indice, lista[i].temPin, lista[i].primario,
+                          lista[i].usaAddonsDoPrimario, cor, nome, av, fu,
+                          lista[i].usaPluginsDoPrimario, aid);
+  }
+  if (p >= sizeof buf) return;   // nao gravar um arquivo truncado
+  dados_gravar(ARQ_LISTA, buf);
+}
+
+// Le um campo ate o proximo TAB ou fim de linha e avanca `*p`.
+static void campo(const char **p, char *dst, size_t tam) {
+  const char *s = *p;
+  size_t i = 0;
+  while (*s && *s != '\t' && *s != '\n') {
+    if (i + 1 < tam) dst[i++] = *s;
+    s++;
+  }
+  if (tam) dst[i] = 0;
+  if (*s == '\t') s++;
+  *p = s;
+}
+
+static void lerCache(void) {
+  char *b = dados_ler(ARQ_LISTA);
+  const char *p;
+  int novos = 0;
+  if (!b) return;
+  memset(lista, 0, sizeof lista);
+  for (p = b; *p && novos < CONTA_PERFIL_MAX; ) {
+    char num[16];
+    ContaPerfil *d = &lista[novos];
+    campo(&p, num, sizeof num); d->indice = atoi(num);
+    campo(&p, num, sizeof num); d->temPin = atoi(num);
+    campo(&p, num, sizeof num); d->primario = atoi(num);
+    campo(&p, num, sizeof num); d->usaAddonsDoPrimario = atoi(num);
+    campo(&p, d->corHex, sizeof d->corHex);
+    campo(&p, d->nome, sizeof d->nome);
+    campo(&p, d->avatarUrl, sizeof d->avatarUrl);
+    campo(&p, d->fundoUrl, sizeof d->fundoUrl);
+    if (*p && *p != '\n' && *p != '\r') {
+      campo(&p, num, sizeof num); d->usaPluginsDoPrimario = atoi(num);
+    }
+    if (*p && *p != '\n' && *p != '\r') campo(&p, d->avatarId, sizeof d->avatarId);
+    while (*p == '\n' || *p == '\r') p++;
+    // Linha sem indice e lixo (arquivo de outra versao, escrita interrompida):
+    // pular uma linha e melhor que desistir do arquivo inteiro.
+    if (d->indice > 0) novos++;
+    else memset(d, 0, sizeof *d);
+  }
+  free(b);
+  if (novos > 0) {
+    n = novos;
+    printf("[perfis] %d perfil(is) do cache: a tela de escolha ja pode abrir\n", n);
+  }
+}
+
+// --- CATALOGO DE AVATARES OFICIAIS -------------------------------------------
+//
+// get_avatar_catalog devolve 42 linhas com `id` e `storage_path`
+// ("avatar_lalo" -> "animals/bram-v1.png"), e a imagem publica mora em
+// <url>/storage/v1/object/public/avatars/<storage_path>. MEDIDO: a RPC responde
+// com a chave ANONIMA, sem token de usuario — o catalogo e o mesmo para todo
+// mundo, entao nao ha o que autorizar.
+//
+// Buscado UMA VEZ por sessao e guardado inteiro: sao ~4 KB de JSON, e pedir por
+// perfil faria a mesma chamada ate oito vezes no arranque.
+#define AV_MAX 64
+typedef struct { char id[64], caminho[128], nome[64], categoria[32], corHex[10]; } AvatarCat;
+static AvatarCat avCat[AV_MAX];
+static _Atomic int nAvCat;
+static int avCatTentado;
+static pthread_mutex_t avCatTrava = PTHREAD_MUTEX_INITIALIZER;
+
+static void avatarCatalogoCarregar(void) {
+  char *r;
+  int st = 0, total = 0;
+  const char *p;
+  pthread_mutex_lock(&avCatTrava);
+  if (avCatTentado) { pthread_mutex_unlock(&avCatTrava); return; }
+  avCatTentado = 1;
+  r = nuvem_rpc_com("get_avatar_catalog", "{}", NULL, &st);
+  if (!r || st < 200 || st >= 300) {
+    if (st) printf("[perfis] catalogo de avatares: HTTP %d\n", st);
+    free(r);
+    avCatTentado = 0; // permitir outra tentativa ao abrir o editor
+    pthread_mutex_unlock(&avCatTrava);
+    return;
+  }
+  for (p = js_raiz_array(r); p && total < AV_MAX; p = js_prox(js_fim(p))) {
+    const char *f = js_fim(p);
+    AvatarCat *a = &avCat[total];
+    a->id[0] = a->caminho[0] = 0;
+    js_texto(p, f, "id", a->id, sizeof a->id);
+    js_texto(p, f, "storage_path", a->caminho, sizeof a->caminho);
+    js_texto(p, f, "display_name", a->nome, sizeof a->nome);
+    js_texto(p, f, "category", a->categoria, sizeof a->categoria);
+    js_texto(p, f, "bg_color", a->corHex, sizeof a->corHex);
+    if (a->id[0] && a->caminho[0]) total++;
+  }
+  free(r);
+  atomic_store(&nAvCat,total);
+  pthread_mutex_unlock(&avCatTrava);
+  printf("[perfis] %d avatares oficiais no catalogo\n", total);
+  fflush(stdout);
+}
+
+void perfis_carregar_avatares(void) { avatarCatalogoCarregar(); }
+
+int perfis_avatares(PerfilAvatar *dst, int max) {
+  int n = atomic_load(&nAvCat), total = n < max ? n : max;
+  if (!dst || max <= 0) return 0;
+  for (int i = 0; i < total; i++) {
+    AvatarCat *a = &avCat[i];
+    memset(&dst[i], 0, sizeof dst[i]);
+    snprintf(dst[i].id,sizeof dst[i].id,"%s",a->id);
+    snprintf(dst[i].nome,sizeof dst[i].nome,"%s",a->nome);
+    snprintf(dst[i].categoria,sizeof dst[i].categoria,"%s",a->categoria);
+    snprintf(dst[i].corHex,sizeof dst[i].corHex,"%s",a->corHex);
+    snprintf(dst[i].url,sizeof dst[i].url,"%s/storage/v1/object/public/avatars/%s",
+             nuvem_url(),a->caminho);
+  }
+  return total;
+}
+
+static int salvarPerfil(int alterar, const char *nome, const char *avatarId, const char *corHex) {
+  char *r, *res;
+  int st = 0, usado[7] = {0}, total = 0, novo = 0;
+  const char *p;
+  Jsw w;
+  if (!nome || !nome[0]) return 0;
+  r = sessao_rpc("sync_pull_profiles", "{}", &st);
+  if (!r || st < 200 || st >= 300) { free(r); return 0; }
+  { const char *q=r;
+    while (*q == ' ' || *q == '\n' || *q == '\t' || *q == '\r') q++;
+    if (*q != '[') { free(r); return 0; }
+  }
+  for (p = js_raiz_array(r); p; p = js_prox(js_fim(p))) {
+    int idx = (int)js_num(p,js_fim(p),"profile_index",0);
+    if (!idx) idx = (int)js_num(p,js_fim(p),"id",0);
+    if (idx >= 1 && idx <= 6) usado[idx] = 1;
+    total++;
+  }
+  // Uma resposta vazia transitoria nao pode apagar os perfis ja vistos nesta
+  // conta: a RPC de push recebe a lista inteira e substitui o estado remoto.
+  if ((alterar == 0 && total >= 6) || (total == 0 && n > 0) ||
+      (alterar > 0 && (alterar > 6 || !usado[alterar]))) { free(r); return 0; }
+  if (alterar) novo = alterar;
+  else for (int i = 2; i <= 6; i++) if (!usado[i]) { novo = i; break; }
+  if (!novo) { free(r); return 0; }
+  jsw_iniciar(&w);
+  jsw_obj_ini(&w);
+  jsw_ci(&w,"p_client_max_profiles",6);
+  jsw_chave(&w,"p_profiles"); jsw_arr_ini(&w);
+  for (p = js_raiz_array(r); p; p = js_prox(js_fim(p))) {
+    const char *f = js_fim(p);
+    char name[64]="", color[10]="#1E88E5", id[64]="", url[320]="";
+    char bgId[64]="", bgUrl[320]="", flag[16];
+    int idx = (int)js_num(p,f,"profile_index",0);
+    if (!idx) idx = (int)js_num(p,f,"id",0);
+    js_texto(p,f,"name",name,sizeof name);
+    js_texto(p,f,"avatar_color_hex",color,sizeof color);
+    js_texto(p,f,"avatar_id",id,sizeof id);
+    js_texto(p,f,"avatar_url",url,sizeof url);
+    js_texto(p,f,"profile_background_id",bgId,sizeof bgId);
+    js_texto(p,f,"profile_background_url",bgUrl,sizeof bgUrl);
+    if (idx == alterar) {
+      snprintf(name,sizeof name,"%s",nome);
+      if (avatarId) {
+        snprintf(id,sizeof id,"%s",avatarId);
+        url[0] = 0;
+      }
+      if (corHex && corHex[0]) snprintf(color,sizeof color,"%s",corHex);
+    }
+    jsw_obj_ini(&w);
+    jsw_ci(&w,"profile_index",idx);
+    jsw_cs(&w,"name",name);
+    jsw_cs(&w,"avatar_color_hex",color);
+    jsw_cs(&w,"avatar_id",id[0]?id:NULL);
+    jsw_cs(&w,"avatar_url",url[0]?url:NULL);
+    jsw_cs(&w,"profile_background_id",bgId[0]?bgId:NULL);
+    jsw_cs(&w,"profile_background_url",bgUrl[0]?bgUrl:NULL);
+    jsw_cb(&w,"uses_primary_addons",js_bruto(p,f,"uses_primary_addons",flag,sizeof flag)
+           && !strcmp(flag,"true"));
+    jsw_cb(&w,"uses_primary_plugins",js_bruto(p,f,"uses_primary_plugins",flag,sizeof flag)
+           && !strcmp(flag,"true"));
+    jsw_obj_fim(&w);
+  }
+  if (!alterar) {
+    jsw_obj_ini(&w);
+    jsw_ci(&w,"profile_index",novo);
+    jsw_cs(&w,"name",nome);
+    jsw_cs(&w,"avatar_color_hex",corHex && corHex[0]?corHex:"#1E88E5");
+    jsw_cs(&w,"avatar_id",avatarId && avatarId[0]?avatarId:NULL);
+    jsw_cs(&w,"avatar_url",NULL);
+    jsw_cs(&w,"profile_background_id",NULL);
+    jsw_cs(&w,"profile_background_url",NULL);
+    jsw_cb(&w,"uses_primary_addons",0);
+    jsw_cb(&w,"uses_primary_plugins",0);
+    jsw_obj_fim(&w);
+  }
+  jsw_arr_fim(&w); jsw_obj_fim(&w);
+  free(r);
+  if (!jsw_texto_final(&w)) { jsw_livre(&w); return 0; }
+  res = sessao_rpc("sync_push_profiles",jsw_texto_final(&w),&st);
+  jsw_livre(&w);
+  free(res);
+  if (st < 200 || st >= 300) return 0;
+  perfis_puxar();
+  return novo;
+}
+
+int perfis_criar(const char *nome, const char *avatarId, const char *corHex) {
+  return salvarPerfil(0, nome, avatarId, corHex);
+}
+
+int perfis_editar(int indice, const char *nome, const char *avatarId, const char *corHex) {
+  return salvarPerfil(indice, nome, avatarId, corHex);
+}
+
+int perfis_definir_pin(int indice, const char *novo, const char *atual) {
+  Jsw w;
+  char *r;
+  int st = 0;
+  if (indice < 1 || !novo || strlen(novo) != 4) return 0;
+  jsw_iniciar(&w); jsw_obj_ini(&w);
+  jsw_ci(&w,"p_profile_id",indice);
+  jsw_cs(&w,"p_pin",novo);
+  if (atual && atual[0]) jsw_cs(&w,"p_current_pin",atual);
+  jsw_obj_fim(&w);
+  r = sessao_rpc("set_profile_pin",jsw_texto_final(&w),&st);
+  jsw_livre(&w); free(r);
+  if (st < 200 || st >= 300) return 0;
+  perfis_puxar();
+  return 1;
+}
+
+int perfis_remover_pin(int indice, const char *atual) {
+  Jsw w;
+  char *r;
+  int st = 0;
+  if (indice < 1 || !atual || strlen(atual) != 4) return 0;
+  jsw_iniciar(&w); jsw_obj_ini(&w);
+  jsw_ci(&w,"p_profile_id",indice);
+  jsw_cs(&w,"p_current_pin",atual);
+  jsw_obj_fim(&w);
+  r = sessao_rpc("clear_profile_pin",jsw_texto_final(&w),&st);
+  jsw_livre(&w); free(r);
+  if (st < 200 || st >= 300) return 0;
+  perfis_puxar();
+  return 1;
+}
+
+// Monta a URL publica do avatar `id`. Devolve 1 quando achou.
+static int avatarOficial(const char *id, char *dst, size_t tam) {
+  int i;
+  if (!id || !id[0] || !dst || !tam) return 0;
+  avatarCatalogoCarregar();
+  for (i = 0; i < atomic_load(&nAvCat); i++) {
+    if (strcmp(avCat[i].id, id)) continue;
+    snprintf(dst, tam, "%s/storage/v1/object/public/avatars/%s",
+             nuvem_url(), avCat[i].caminho);
+    return 1;
+  }
+  return 0;
+}
+
+int perfis_puxar(void) {
+  char *r;
+  int st = 0;
+  const char *p;
+
+  lerDono();
+
+  r = sessao_rpc("sync_pull_profiles", "{}", &st);
+  if (!r || st < 200 || st >= 300) { free(r); return n; }
+
+  // Lista vazia NAO apaga o que ja esta em memoria: e a mesma regra que o app
+  // web aplica em toda superficie. Resposta vazia pode ser perfil errado, 401
+  // mal tratado ou servidor fora do ar, e nenhum desses e "o usuario apagou os
+  // perfis".
+  { int novos = 0;
+    ContaPerfil tmp[CONTA_PERFIL_MAX];
+    memset(tmp, 0, sizeof tmp);
+    for (p = js_raiz_array(r); p && novos < CONTA_PERFIL_MAX; p = js_prox(js_fim(p))) {
+      const char *f = js_fim(p);
+      double idx = js_num(p, f, "profile_index", 0);
+      if (idx <= 0) idx = js_num(p, f, "id", 0);
+      if (idx <= 0) continue;
+      tmp[novos].indice = (int)idx;
+      // "ContaPerfil %d" ficou aqui quando a struct Perfil virou ContaPerfil
+      // para nao colidir com o trakt.h legado. O tipo mudou de nome; o que o
+      // usuario le, nao.
+      if (!js_texto(p, f, "name", tmp[novos].nome, sizeof tmp[novos].nome))
+        snprintf(tmp[novos].nome, sizeof tmp[novos].nome, "Perfil %d", (int)idx);
+      js_texto(p, f, "avatar_url", tmp[novos].avatarUrl, sizeof tmp[novos].avatarUrl);
+      // O AVATAR OFICIAL VEM POR ID, e nao por URL. `avatar_url` so e
+      // preenchido para foto que a pessoa subiu; quem escolhe um dos avatares
+      // do Nuvio guarda `avatar_id` ("avatar_lalo") e a imagem sai do catalogo.
+      // Ver avatarOficial: e uma RPC, get_avatar_catalog, e nao a tabela
+      // `avatars` — foi por procurar a tabela que uma medicao antiga concluiu
+      // que nao havia como resolver o id, e os perfis ficaram todos com a
+      // inicial num circulo colorido.
+      js_texto(p, f, "avatar_id", tmp[novos].avatarId, sizeof tmp[novos].avatarId);
+      if (!tmp[novos].avatarUrl[0] && tmp[novos].avatarId[0]) {
+        if (!avatarOficial(tmp[novos].avatarId, tmp[novos].avatarUrl, sizeof tmp[novos].avatarUrl))
+          // O perfil PEDE um avatar que o catalogo nao tem. Sem esta linha o
+          // circulo cai na inicial e nada diz por que — indistinguivel de um
+          // perfil que nunca escolheu avatar nenhum.
+          printf("[perfis] avatar \"%s\" nao esta no catalogo\n", tmp[novos].avatarId);
+      }
+      js_texto(p, f, "profile_background_url", tmp[novos].fundoUrl,
+               sizeof tmp[novos].fundoUrl);
+      if (!js_texto(p, f, "avatar_color_hex", tmp[novos].corHex, sizeof tmp[novos].corHex))
+        snprintf(tmp[novos].corHex, sizeof tmp[novos].corHex, "#1E88E5");
+      { char b[16];
+        // Sem o campo, o perfil 1 e o primario — e a mesma regra do web.
+        tmp[novos].primario = js_bruto(p, f, "is_primary", b, sizeof b)
+                              ? (strcmp(b, "true") == 0) : ((int)idx == 1); }
+      { char b[16];
+        // `uses_primary_addons`, NAO `uses_primary_plugins`. Sao DUAS colunas
+        // diferentes no servidor e este campo decide de qual perfil vem a lista
+        // de ADDONS; a de plugins nao existe aqui. Relato do Mane155 que pegou
+        // isto: o perfil 2 dele mostrava "0 addons" no nativo e 3 no app web.
+        // Com uses_primary_addons=true e uses_primary_plugins=false, o web
+        // resolvia para o perfil 1 (e achava as 3) enquanto o nativo pedia pelo
+        // perfil 2, que nao tem linha nenhuma na tabela `addons` — resposta
+        // vazia, sem erro, e a tela de ajustes dizendo zero.
+        // O nome antigo fica como reserva: linha gravada por uma versao que so
+        // conhecia aquela coluna continua sendo lida.
+        tmp[novos].usaAddonsDoPrimario =
+          js_bruto(p, f, "uses_primary_addons", b, sizeof b)
+          ? (strcmp(b, "true") == 0)
+          : (js_bruto(p, f, "uses_primary_plugins", b, sizeof b)
+             ? (strcmp(b, "true") == 0) : 0); }
+      { char b[16];
+        tmp[novos].usaPluginsDoPrimario =
+          js_bruto(p, f, "uses_primary_plugins", b, sizeof b) &&
+          !strcmp(b, "true"); }
+      novos++;
+    }
+    if (novos > 0) { memcpy(lista, tmp, sizeof lista); n = novos; }
+  }
+  free(r);
+
+  // Travas: um perfil com PIN nao pode ser aberto so por estar na lista.
+  r = sessao_rpc("sync_pull_profile_locks", "{}", &st);
+  if (r && st >= 200 && st < 300) {
+    for (p = js_raiz_array(r); p; p = js_prox(js_fim(p))) {
+      const char *f = js_fim(p);
+      int idx = (int)js_num(p, f, "profile_id", 0);
+      char b[16];
+      int i, travado;
+      if (!idx) idx = (int)js_num(p, f, "profile_index", 0);
+      // MEDIDO: esta RPC devolve UMA LINHA POR PERFIL, com `pin_enabled` false
+      // quando nao ha PIN — nao e uma lista so dos travados. Marcar todo perfil
+      // que aparece aqui trancava TODOS eles, e como nenhum tem PIN nenhuma
+      // digitacao seria aceita: ninguem entraria na propria conta.
+      travado = js_bruto(p, f, "pin_enabled", b, sizeof b)
+                ? (strcmp(b, "true") == 0) : 0;
+      for (i = 0; i < n; i++)
+        if (lista[i].indice == idx) lista[i].temPin = travado;
+    }
+  }
+  free(r);
+
+  gravarCache();
+  printf("[perfis] %d perfil(is), dono=%s, ativo=%d\n", n, dono, ativo);
+  return n;
+}
+
+int           perfis_n(void)         { return n; }
+const ContaPerfil *perfis_item(int i)     { return (i >= 0 && i < n) ? &lista[i] : NULL; }
+
+const ContaPerfil *perfis_item_ativo(void) {
+  int i;
+  for (i = 0; i < n; i++) if (lista[i].indice == ativo) return &lista[i];
+  return NULL;
+}
+const char   *perfis_dono(void)      { return dono; }
+int           perfis_ativo(void)     { return ativo > 0 ? ativo : 1; }
+
+// Addons NAO sao por perfil quando o perfil diz herdar os do primario.
+//
+// MEDIDO no app web (js/data/local/pluginStore.js:26):
+//   return profile?.usesPrimaryPlugins && normalized !== "1" ? "1" : normalized;
+// O nativo ignorava isso e pedia sempre profile_id=<indice>, entao um perfil
+// com a marca voltava com ZERO addons — o relato "os perfis nao sincronizam os
+// addons". O perfil 1 nunca e redirecionado: ele E a origem.
+int perfis_ativo_addons(void) {
+  const ContaPerfil *p = perfis_item_ativo();
+  int a = perfis_ativo();
+  return (p && p->usaAddonsDoPrimario && a != 1) ? 1 : a;
+}
+
+int perfis_ativo_plugins(void) {
+  const ContaPerfil *p = perfis_item_ativo();
+  int a = perfis_ativo();
+  return (p && p->usaPluginsDoPrimario && a != 1) ? 1 : a;
+}
+
+void perfis_carregar_ativo(void) {
+  char *b = dados_ler(ARQ_ATIVO);
+  if (b) {
+    int v = atoi(b);
+    // `gravado`, e NAO `escolhido`: ler o arquivo prova que alguem escolheu
+    // ontem, nao que quem esta na frente da TV agora e a mesma pessoa.
+    if (v > 0) { ativo = v; gravado = 1; }
+    free(b);
+  }
+  // A escolha de fileiras acompanha o perfil desde o arranque, senao a home
+  // do perfil 1 e montada com o arquivo do perfil 2 ate a primeira troca.
+  fil_definir_perfil(ativo);
+  // A FONTE LEMBRADA ACOMPANHA O PERFIL desde o arranque, pela mesma razao das
+  // fileiras: sem isto o perfil 2 retomaria na fonte dublada que o perfil 1
+  // escolheu, ate a primeira troca.
+  fontepref_definir_perfil(ativo);
+  arteesc_definir_perfil(ativo);
+  lerCache();
+}
+
+void perfis_definir_ativo(int indice) {
+  char linha[32];
+  if (indice <= 0) return;
+  ativo = indice;
+  fil_definir_perfil(indice);
+  fontepref_definir_perfil(indice);
+  arteesc_definir_perfil(indice);
+  escolhido = 1;
+  gravado = 1;
+  snprintf(linha, sizeof linha, "%d\n", indice);
+  dados_gravar(ARQ_ATIVO, linha);
+  printf("[perfis] perfil ativo: %d\n", indice);
+}
+
+void perfis_manter_ativo(void) { escolhido = 1; }
+
+int perfis_sem_escolha(void) {
+  if (n <= 0) return 1;
+  if (n == 1) return !lista[0].temPin;
+  return 0;
+}
+
+int perfis_precisa_escolher(void) {
+  return !escolhido && !perfis_sem_escolha();
+}
+
+int perfis_pode_dispensar(void) {
+  const ContaPerfil *p;
+  if (escolhido) return 1;
+  if (!gravado) return 0;
+  p = perfis_item_ativo();
+  // Sem o perfil na lista nao da para saber se ele esta travado; recusar e a
+  // resposta segura. Com ele, o Voltar so vale quando nao ha PIN — senao a
+  // tecla de voltar seria a chave da fechadura.
+  return p && !p->temPin;
+}
+
+int perfis_indice_sugerido(void) {
+  int i;
+  for (i = 0; i < n; i++) if (lista[i].indice == ativo) return i;
+  return 0;
+}
+
+PerfilAcao perfis_acao(int i) {
+  if (i < 0 || i >= n) return PERFIL_ACAO_NADA;
+  return lista[i].temPin ? PERFIL_ACAO_PIN : PERFIL_ACAO_ENTRAR;
+}
+
+int perfis_verificar_pin(int indice, const char *pin) {
+  Jsw w;
+  char *r;
+  int st = 0, ok = 0;
+  jsw_iniciar(&w);
+  jsw_obj_ini(&w);
+  jsw_ci(&w, "p_profile_id", indice);
+  jsw_cs(&w, "p_pin", pin ? pin : "");
+  jsw_obj_fim(&w);
+  r = sessao_rpc("verify_profile_pin", jsw_texto_final(&w), &st);
+  jsw_livre(&w);
+  // TRES respostas e nao duas. "Nao consegui perguntar" nao e "voce errou": com
+  // dois valores, uma TV sem rede acusava a pessoa de errar o PIN que ela
+  // digitou certo — e a tela ate tinha o aviso de conexao, so que inalcancavel.
+  if (!r || st < 200 || st >= 300) { free(r); return -1; }
+  // A RPC devolve um booleano; aceitar so o HTTP 200 deixaria passar um PIN
+  // errado, que responde 200 com `false`.
+  ok = (strstr(r, "true") != NULL);
+  free(r);
+  return ok;
+}
+
+void perfis_esquecer(void) {
+  memset(lista, 0, sizeof lista);
+  n = 0;
+  dono[0] = 0;
+  ativo = 1;
+  escolhido = 0;
+  gravado = 0;
+  dados_apagar(ARQ_ATIVO);
+  // O cache da LISTA sai junto. Ele guarda os nomes das pessoas da conta
+  // anterior e as URLs dos avatares delas — deixa-lo no aparelho faria a tela
+  // de escolha da proxima conta abrir mostrando a familia da conta passada.
+  dados_apagar(ARQ_LISTA);
+  printf("[perfis] perfis esquecidos (saiu da conta)\n");
+}

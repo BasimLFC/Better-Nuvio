@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111013">
+  <title>Better Nuvio — atualizações</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #111013; color: #f4f1ec; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 80% -10%, #514028 0, transparent 42%), #111013; }
+    main { width: min(960px, calc(100% - 40px)); margin: 0 auto; padding: clamp(48px, 8vw, 96px) 0; }
+    .eyebrow { color: #d9b566; font-size: 0.8rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 12px 0 8px; font-size: clamp(2.6rem, 7vw, 5rem); letter-spacing: -.045em; line-height: 1; }
+    .intro { color: #bfbab2; font-size: clamp(1rem, 2.2vw, 1.2rem); line-height: 1.55; max-width: 650px; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 30px 0 44px; }
+    .actions a { padding: 14px 20px; border-radius: 999px; color: #f4f1ec; border: 1px solid #5b5348; text-decoration: none; font-weight: 650; }
+    .actions a:first-child { color: #19140c; border-color: #d9b566; background: #d9b566; }
+    .actions a:hover, .actions a:focus-visible { outline: 2px solid #f3d691; outline-offset: 3px; }
+    .android-card { margin: -14px 0 38px; }
+    .android-card p { margin: 0; color: #d2cdd0; line-height: 1.55; }
+    .android-card code { overflow-wrap: anywhere; font-size: .85em; }
+    .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    section { background: #1c1b1e; border: 1px solid #343238; border-radius: 20px; padding: 26px 28px; }
+    h2 { margin: 0 0 16px; font-size: 1.2rem; }
+    ul { margin: 0; padding-left: 1.2em; color: #d2cdd0; line-height: 1.55; }
+    li + li { margin-top: 12px; }
+    footer { margin-top: 42px; color: #aaa4a6; font-size: .9rem; }
+    footer a { color: #d9b566; }
+    @media (max-width: 690px) { .notes { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Atualizações para TV</div>
+    <h1>Better Nuvio <span id="version"></span></h1>
+    <p class="intro">Veja o que mudou nesta versão antes de instalar. As notas abaixo também aparecem no aviso de atualização dentro do app.</p>
+    <nav class="actions" aria-label="Downloads e catálogo">
+      <a id="download" href="/apps.json">Baixar para LG webOS</a>
+      <a href="/better-nuvio-android-tv-0.1.2-firetv-4k-max-2-debug.apk" download aria-describedby="android-summary">Baixar APK para Android TV / Fire TV</a>
+      <a href="/apps.json">Catálogo do Homebrew Channel</a>
+      <a href="https://github.com/alenkpedro/better-nuvio">Código-fonte</a>
+    </nav>
+    <section class="android-card" aria-labelledby="android-title">
+      <h2 id="android-title">Android TV / Fire TV — teste 0.1.2</h2>
+      <p id="android-summary">APK para instalação direta no Fire TV Stick 4K Max de 2ª geração. Esta versão corrige a exibição de imagens WebP em perfis e capas e usa os controles de reprodução do Better Nuvio. A seleção de faixas de áudio e legendas ainda está em adaptação.</p>
+      <p>SHA-256: <code>156fc1b37e27da0f677a41f4a0d40b088db3c37175ad3649bf91a70c875ddffe</code></p>
+    </section>
+    <div class="notes" id="notes" aria-live="polite"></div>
+    <footer>Para LG webOS, consulte o <a href="/webosbrew.manifest.json">manifesto</a> para conferir a versão e o SHA-256.</footer>
+  </main>
+  <script>
+    fetch('/releases/latest.json', {cache: 'no-store'})
+      .then(response => { if (!response.ok) throw Error('release'); return response.json(); })
+      .then(release => {
+        document.getElementById('version').textContent = (release.tag_name || '').replace(/^v/, '');
+        const asset = release.assets && release.assets.find(item => item.name && item.name.endsWith('_arm.ipk'));
+        if (asset) document.getElementById('download').href = asset.browser_download_url;
+        const notes = document.getElementById('notes');
+        let list;
+        for (const line of (release.body || '').split('\n')) {
+          if (line.startsWith('## ')) {
+            const section = document.createElement('section');
+            const title = document.createElement('h2');
+            title.textContent = line.slice(3);
+            list = document.createElement('ul');
+            section.append(title, list);
+            notes.append(section);
+          } else if (list && line.startsWith('- ')) {
+            const item = document.createElement('li');
+            item.textContent = line.slice(2);
+            list.append(item);
+          }
+        }
+      })
+      .catch(() => { document.getElementById('notes').textContent = 'Não foi possível carregar as notas desta versão.'; });
+  </script>
+</body>
+</html>

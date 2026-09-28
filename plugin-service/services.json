@@ -1,0 +1,8 @@
+{
+  "id": "space.nuvio.native.enhanced.lab.plugin",
+  "description": "Executor local de plugins JavaScript do Better Nuvio",
+  "services": [{
+    "name": "space.nuvio.native.enhanced.lab.plugin",
+    "commands": [{"name":"ping","public":true}]
+  }]
+}

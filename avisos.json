@@ -1,0 +1,23 @@
+[
+  {
+    "id": "2026-09-28-credenciais-1516",
+    "desde": "2026-09-28",
+    "ate": "2026-10-15",
+    "plataforma": "webos",
+    "titulo": "Atualização de segurança 1.5.16",
+    "titulo_en": "Security update 1.5.16",
+    "texto": "A versão 1.5.16 remove o segredo do Trakt e a chave compartilhada do Seekr do IPK. Após instalar, conecte novamente o Trakt em Ajustes. O Seekr passa a usar apenas a chave pessoal configurada no dispositivo.",
+    "texto_en": "Version 1.5.16 removes the Trakt secret and shared Seekr key from the IPK. After installing, reconnect Trakt in Settings. Seekr now uses only a personal key configured on the device."
+  },
+  {
+    "id": "2026-09-28-download-ipk",
+    "desde": "2026-09-28",
+    "ate": "2026-10-15",
+    "plataforma": "webos",
+    "ate_versao": "1.5.15",
+    "titulo": "Instale o novo IPK",
+    "titulo_en": "Install the new IPK",
+    "texto": "Pacotes anteriores ainda podem existir em downloads e caches. Acesse betternuvio.vercel.app para baixar a versão 1.5.16 e confira o SHA-256 no manifesto. A troca do arquivo no GitHub não altera cópias já baixadas.",
+    "texto_en": "Older packages may remain in downloads and caches. Get version 1.5.16 at betternuvio.vercel.app and check its SHA-256 in the manifest. Changing a GitHub file does not alter downloaded copies."
+  }
+]

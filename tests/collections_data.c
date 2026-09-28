@@ -1,0 +1,80 @@
+// Exercises the real paged reader with a fake network, including stale responses.
+#include <assert.h>
+#include <unistd.h>
+#include "../src/descoberta.c"
+// descoberta.c passou a traduzir os rotulos que monta ("Filme", "Serie", a
+// data por extenso) e este teste nao linka idioma.c: linkar puxaria
+// ajustes_idioma_ingles e, atras dele, ajustes.c e o resto do app — o oposto
+// do que um teste do leitor paginado deve carregar. Devolver a entrada e o que
+// i18n faz com o idioma em portugues, que e o padrao, entao os rotulos que as
+// asserçoes comparam sao exatamente os de producao. Mesmo stub de
+// tests/colfileiras.c.
+// 0 = portugues, o padrao — e o idioma em que as asserçoes deste arquivo
+// escreveram os rotulos esperados.
+int ajustes_idioma_ingles(void) { return 0; }
+// Integracao TMDB ligada por padrao — ver a nota igual em tests/colfileiras.c.
+int ajustes_tmdb_ligado(void) { return 1; }
+const char *ajustes_tmdb_idioma(void) { return "pt-BR"; }
+const char *i18n(const char *s) { return s; }
+// Ramo de fonte nao-addon (issue #44) e refazer da fileira CW (#38): nao sao
+// o que este teste mede, mas fioVerTudo/fioContinuar referenciam os simbolos.
+const char *nuvem_trakt_cliente(void) { return ""; }
+char *rede_baixar_com(const char *u, int t, const char *const *c) {
+  (void)c; return rede_baixar(u, t); }
+int trakt_enfeitar_lote(CatItem *s, int n) { (void)s; (void)n; return 0; }
+void cat_trocar_continuar(const CatItem *l, int q) { (void)l; (void)q; }
+static int calls;
+static pthread_mutex_t fakeLock=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fakeCond=PTHREAD_COND_INITIALIZER;
+static int slowStarted,releaseSlow;
+char *rede_baixar(const char *url,int timeout) {
+  (void)timeout;calls++;
+  if(strstr(url,"/slow/")) {
+    pthread_mutex_lock(&fakeLock);slowStarted=1;pthread_cond_broadcast(&fakeCond);
+    while(!releaseSlow)pthread_cond_wait(&fakeCond,&fakeLock);
+    pthread_mutex_unlock(&fakeLock);
+    return strdup("{\"metas\":[{\"id\":\"ttold\",\"name\":\"OLD\",\"poster\":\"old.jpg\"}]}");
+  }
+  if(strstr(url,"/error/"))return NULL;
+  if(strstr(url,"/empty/"))return strdup("{\"metas\":[]}");
+  if(strstr(url,"skip=2"))return strdup("{\"metas\":[{\"id\":\"tt3\",\"name\":\"Third\",\"poster\":\"3.jpg\"}]}");
+  if(strstr(url,"skip=3"))return strdup("{\"metas\":[]}");
+  return strdup("{\"metas\":[{\"id\":\"tt1\",\"name\":\"First\",\"poster\":\"1.jpg\"},{\"id\":\"tt2\",\"name\":\"Second\",\"poster\":\"2.jpg\"}]}");
+}
+static void waitDone(void) {for(int i=0;i<2000&&desc_vertudo_carregando();i++)usleep(1000);assert(!desc_vertudo_carregando());}
+int main(void) {
+  // URLs de instancia podem carregar configuracao longa. O nome do catalogo
+  // deve usar a base completa e nunca misturar duas instancias parecidas.
+  char baseA[420] = "https://addon.test/", baseB[420];
+  size_t prefixo = strlen(baseA);
+  memset(baseA + prefixo, 'a', 330);
+  baseA[prefixo + 330] = 0;
+  snprintf(baseB, sizeof baseB, "%s", baseA);
+  baseB[310] = 'b';
+  registrarNomeCatalogo(baseA, "movie", "snoak_top100_movies", "Top 100 de hoje");
+  assert(!strcmp(desc_nome_catalogo(baseA, "movie", "snoak_top100_movies"),
+                 "Top 100 de hoje"));
+  assert(!desc_nome_catalogo(baseB, "movie", "snoak_top100_movies")[0]);
+  for (int i = 0; i < 605; i++) {
+    char id[40];
+    snprintf(id, sizeof id, "catalogo-%d", i);
+    registrarNomeCatalogo(baseA, "movie", id, "Outro catálogo");
+  }
+  assert(!strcmp(desc_nome_catalogo(baseA, "movie", "snoak_top100_movies"),
+                 "Top 100 de hoje"));
+
+  desc_vertudo_abrir("https://example.invalid","movie","rank");waitDone();
+  assert(desc_vertudo_n()==2&&!desc_vertudo_fim());
+  desc_vertudo_mais();waitDone();assert(desc_vertudo_n()==3);
+  CatItem i;assert(desc_vertudo_item(2,&i)&&!strcmp(i.imdb,"tt3"));
+  desc_vertudo_mais();waitDone();assert(desc_vertudo_fim());
+  desc_vertudo_abrir("https://example.invalid/slow","movie","slow");
+  pthread_mutex_lock(&fakeLock);while(!slowStarted)pthread_cond_wait(&fakeCond,&fakeLock);pthread_mutex_unlock(&fakeLock);
+  desc_vertudo_abrir("https://example.invalid/new","series","new");
+  pthread_mutex_lock(&fakeLock);releaseSlow=1;pthread_cond_broadcast(&fakeCond);pthread_mutex_unlock(&fakeLock);
+  waitDone();assert(desc_vertudo_n()==2);assert(desc_vertudo_item(0,&i)&&!strcmp(i.tipo,"series")&&!strcmp(i.imdb,"tt1"));
+  desc_vertudo_abrir("https://example.invalid/error","movie","error");waitDone();assert(desc_vertudo_erro()&&!desc_vertudo_fim());
+  int before=calls;desc_vertudo_mais();waitDone();assert(calls>before);
+  desc_vertudo_abrir("https://example.invalid/empty","movie","empty");waitDone();assert(!desc_vertudo_erro()&&desc_vertudo_fim()&&desc_vertudo_n()==0);
+  puts("collections data: PASS (short pages, rank order, stale tab discarded, retry, empty)");
+}
