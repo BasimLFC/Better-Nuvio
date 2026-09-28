@@ -93,8 +93,11 @@ const char *addons_base_por_id(const char *id) { (void)id; return ""; }
 int addons_montar_url(int i, const char *recurso, char *dst, size_t tam) {
   (void)i; (void)recurso; if (tam) dst[0] = 0; return 0; }
 void  addons_manifesto_lido(int i, const char *corpo) { (void)i; (void)corpo; }
+static int cinemetaMonster;
 char *rede_baixar(const char *u, int t)    {
   (void)t;
+  if (cinemetaMonster && strstr(u, "v3-cinemeta.strem.io/meta/series/tt13207736.json"))
+    return strdup("{\"meta\":{\"id\":\"tt13207736\",\"name\":\"Monster\",\"poster\":\"monster.jpg\"}}");
   if (strstr(u, "metadata.test/meta/"))
     return strdup("{\"meta\":{\"name\":\"Título do addon\",\"description\":\"Sinopse do addon\",\"poster\":\"poster.png\"}}");
   return NULL;
@@ -325,6 +328,14 @@ int main(void) {
     assert(!strcmp(lote[0].titulo, "Monstro: Ed Gein"));
     assert(!strcmp(lote[0].poster, "gein.jpg") && lote[0].temporadaFonte == 3);
     puts("ok  Monstros S3 usa o card de Ed Gein sem meta do addon");
+
+    cat_definir_tudo(NULL, 0, NULL, 0);
+    cinemetaMonster = 1;
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].titulo, "Monstros") && !strcmp(lote[0].poster, "monster.jpg"));
+    puts("ok  Monstros continua visivel apos reiniciar sem o card do arco");
+    cinemetaMonster = 0;
+    cat_definir_tudo(arcos, 2, NULL, 0);
 
     cat_salvar_progresso_ep(1, 1200, 3000, 3, 2);
     assert(prog_ler(regs, 4) == 1 && !strcmp(regs[0].contentId, "tt13207736"));

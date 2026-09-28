@@ -2395,8 +2395,9 @@ static void localizarContinuar(CatItem *itens, int n, unsigned char *localizados
   MetaContinuar job;
   pthread_t fios[4];
   int i, melhor, criados = 0;
+  if (n <= 0 || n > CONT_MAX) return;
   if (localizados) memset(localizados, 0, (size_t)n);
-  if (n <= 0 || perfis_precisa_escolher() ||
+  if (perfis_precisa_escolher() ||
       addons_perfil_da_lista() != perfis_ativo()) return;
   // Xperience costuma fornecer o texto localizado da conta. Cinemeta ja foi
   // usado para preencher lacunas; repetir sua resposta aqui manteria o ingles.
@@ -2454,12 +2455,39 @@ static int metaContinuarDoCatalogo(CatItem *it, int preferirArco) {
   return 1;
 }
 
+// O card aberto so pela colecao nao integra necessariamente o catalogo salvo
+// da Home. Apos reiniciar, o progresso da antologia ainda aponta para a serie
+// principal, mas o addon de metadados do perfil pode nao ter essa serie.
+// Buscar a capa canonica nesse caso evita que o titulo desapareca da fileira;
+// quando o arco voltar ao catalogo, ele substitui este card na proxima refacao.
+static int metaContinuarMonsterReserva(CatItem *it) {
+  char id[24];
+  unsigned char localizado = 0;
+  MetaContinuar job;
+  prog_content_id(id, sizeof id, it->imdb, NULL, NULL);
+  if (strcmp(id, "tt13207736")) return 0;
+  memset(&job, 0, sizeof job);
+  job.itens = it;
+  job.localizados = &localizado;
+  job.n = 1;
+  snprintf(job.base, sizeof job.base, "https://v3-cinemeta.strem.io");
+  pthread_mutex_init(&job.trava, NULL);
+  metaContinuarFio(&job);
+  pthread_mutex_destroy(&job.trava);
+  if (!localizado) return 0;
+  snprintf(it->titulo, sizeof it->titulo, "%s",
+           ajustes_idioma_ingles() ? "Monster" : "Monstros");
+  return 1;
+}
+
 static void complementarContinuarDoCatalogo(CatItem *itens, int n,
                                              unsigned char *localizados) {
   for (int i = 0; i < n; i++) {
     if (metaContinuarDoCatalogo(&itens[i], 1)) {
       localizados[i] = 1;
     } else if (!localizados[i] && metaContinuarDoCatalogo(&itens[i], 0)) {
+      localizados[i] = 1;
+    } else if (!localizados[i] && metaContinuarMonsterReserva(&itens[i])) {
       localizados[i] = 1;
     }
   }
