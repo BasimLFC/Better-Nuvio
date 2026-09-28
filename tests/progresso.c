@@ -45,6 +45,13 @@ static void chaveIgualAoWeb(void) {
   { int t = -1, e = -1; char id[24];
     prog_content_id(id, sizeof id, "tt1234567:4:9", &t, &e);
     assert(!strcmp(id, "tt1234567") && t == 4 && e == 9); }
+  { int t = -1, e = -1; char id[24];
+    prog_content_id(id, sizeof id, "tmdb:12345", &t, &e);
+    assert(!strcmp(id, "tmdb:12345") && t == -1 && e == -1);
+    prog_content_id(id, sizeof id, "tmdb:12345:3:2", &t, &e);
+    assert(!strcmp(id, "tmdb:12345") && t == 3 && e == 2);
+    prog_chave(k, sizeof k, "tmdb:12345", 3, 2);
+    assert(!strcmp(k, "tmdb:12345_s3e2")); }
   puts("ok  chave igual ao toProgressKey do web");
 }
 

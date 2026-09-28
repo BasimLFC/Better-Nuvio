@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.21",
-  "body": "## Legendas com a tipografia escolhida\n- O IPK anterior não continha os arquivos locais da Netflix Sans. Por isso, o libass recorria à Helvetica mesmo com Netflix Sans selecionada. Este pacote inclui os pesos Regular e Medium; a compilação agora falha se qualquer um deles estiver ausente.\n- Falas de legendas externas e de faixas de texto embutidas usam a fonte, a cor, o tamanho, o fundo e a posição escolhidos no player. As faixas ASS mantêm itálico e outros destaques do próprio texto, além de preservar placas e efeitos posicionados.\n- A extração de MKV foi verificada com faixas ASS e SRT embutidas. Formatos de imagem e caminhos em que o dispositivo só fornece a legenda pela TV continuam sujeitos ao renderizador nativo.\n## Idiomas mais fáceis de encontrar\n- O seletor agora mostra Desativada e Embutidas separadamente. As legendas obtidas pelos add-ons ficam por idioma: primeiro os idiomas preferidos, depois os demais em ordem alfabética e por último as faixas sem idioma identificado.\n- A lista à direita acompanha o idioma em foco ao navegar com o controle. Uma legenda externa já selecionada continua visível mesmo quando o filtro de idiomas favoritos está ativo.\n## Atualização e conferência\n- O IPK 1.5.21 mantém o ID com.betternuvio.app e substitui a versão anterior com o mesmo ID. O pacote e o catálogo apontam para o mesmo arquivo e SHA-256.\n- Os testes cobriram a seleção de idiomas, a extração das três faixas de um MKV com ASS e SRT, a aplicação da fonte Netflix Sans pelo libass e a compilação para LG webOS e Mac. A presença de fontes de vídeo ainda depende dos add-ons instalados.\n",
+  "tag_name": "v1.5.22",
+  "body": "## Monstros nas coleções\n- Os cards de Dahmer, Irmãos Menendez, Ed Gein e Lizzie Borden agora abrem com a identidade da coleção e buscam temporadas, episódios e fontes pela série principal. Isso vale para coleções vindas do TMDB ou do Trakt; o app não fica aguardando uma segunda resolução do ID do TMDB para esses arcos.\n- O mesmo mapeamento é aplicado quando um título abre por outra grade, antes de carregar os dados do detalhe.\n## Continuar assistindo\n- O progresso de cada episódio é gravado sob a série principal e reaparece no card do arco que corresponde à temporada assistida. Registros antigos gravados com o ID do arco continuam reconhecidos.\n- Se o add-on de metadados não devolver a série principal, o app usa a arte e o título do arco já presentes no catálogo. Quando o catálogo termina de carregar depois do histórico, a fileira é refeita para incluir o título pendente.\n- IDs do TMDB com dois-pontos permanecem completos ao ler e gravar progresso; só o sufixo numérico de temporada e episódio é separado.\n## Verificação\n- Passaram os testes de episódios dos quatro arcos, progresso local e antigo, ordenação e remoção do Continuar assistindo, coleções e compilação para Mac e LG webOS. A lista de fontes ainda depende dos add-ons instalados e da disponibilidade de streams para o episódio.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.21_arm.ipk",
-      "size": 52074042,
-      "digest": "sha256:11694d9f70d1513dd8c44173d2491ad41588278e3261600d4ce0307a8e5a24fd",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.21_arm.ipk"
+      "name": "com.betternuvio.app_1.5.22_arm.ipk",
+      "size": 52076150,
+      "digest": "sha256:0d25dce7b7d784c6e874a41bb2cfcd6446b86b67cbf187c63f83c2a7fedfd6fc",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.22_arm.ipk"
     }
   ]
 }

@@ -56,6 +56,7 @@ int   ajustes_tmdb_basico(void)            { return 0; }
 int   ajustes_tmdb_arte(void)              { return 0; }
 int   ajustes_tmdb_elenco(void)            { return 0; }
 int   ajustes_tmdb_cw(void)                { return 0; }
+int   ajustes_tmdb_eps(void)               { return 0; }
 const char *ajustes_tmdb_idioma(void)      { return "pt-BR"; }
 const char *ajustes_tmdb_chave(void)       { return ""; }
 void  fil_gravar_registro(void)            { }
@@ -105,6 +106,8 @@ const char *addons_id_manifesto(int i)     { (void)i; return ""; }
 const char *addons_nome(int i)             { (void)i; return "addon"; }
 unsigned addons_versao(void)               { return 1; }
 const char *addons_base_por_id(const char *id) { (void)id; return ""; }
+int addons_montar_url(int i, const char *recurso, char *dst, size_t tam) {
+  (void)i; (void)recurso; if (tam) dst[0] = 0; return 0; }
 void  addons_manifesto_lido(int i, const char *corpo) { (void)i; (void)corpo; }
 char *rede_baixar(const char *u, int t)    {
   (void)t;

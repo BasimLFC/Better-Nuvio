@@ -934,6 +934,13 @@ void detail_abrir(const HomeItem *it) {
   trailerSemFonteLogado = 0;
   trailerCopy = 0.0f; trailerCopyOculta = 0;
   idx = it->indice;
+  // Colecoes e grades abrem o detalhe diretamente, sem passar por abrirTitulo
+  // em app.c. O alias deve existir antes dos pedidos de extras e episodios.
+  { const CatItem *ci = cat_item(idx);
+    if (ci) {
+      CatItem edit = *ci;
+      if (seriealias_aplicar(&edit)) cat_atualizar_item(idx, &edit);
+    } }
   revistaVista = cat_revisao();
   // Guarda identidade e copia ANTES de qualquer republicacao. Ver revalidarIdx.
   arteFixa[0] = logoFixo[0] = logoCatalogoFixo[0] = 0;

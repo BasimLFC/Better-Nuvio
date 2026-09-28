@@ -34,12 +34,14 @@ char *dados_ler(const char *nome)                 { (void)nome; return NULL; }
 int   dados_gravar(const char *nome, const char *c) { (void)nome; (void)c; return 1; }
 int   dados_apagar(const char *nome)              { (void)nome; return 1; }
 void  SDL_Delay(Uint32 ms)                 { usleep(ms * 1000); }
-int   ajustes_cw_fonte(void)               { return 0; }   // AJ_CWF_AMBAS
+static int fonteTeste = AJ_CWF_AMBAS;
+int   ajustes_cw_fonte(void)               { return fonteTeste; }
 int   ajustes_tmdb_ligado(void)            { return 0; }
 int   ajustes_tmdb_basico(void)            { return 0; }
 int   ajustes_tmdb_arte(void)              { return 0; }
 int   ajustes_tmdb_elenco(void)            { return 0; }
 int   ajustes_tmdb_cw(void)                { return 0; }
+int   ajustes_tmdb_eps(void)               { return 0; }
 const char *ajustes_tmdb_idioma(void)      { return "pt-BR"; }
 const char *ajustes_tmdb_chave(void)       { return ""; }
 void  fil_gravar_registro(void)            { }
@@ -88,6 +90,8 @@ const char *addons_id_manifesto(int i)     { (void)i; return ""; }
 const char *addons_nome(int i)             { (void)i; return "addon"; }
 unsigned addons_versao(void)               { return 1; }
 const char *addons_base_por_id(const char *id) { (void)id; return ""; }
+int addons_montar_url(int i, const char *recurso, char *dst, size_t tam) {
+  (void)i; (void)recurso; if (tam) dst[0] = 0; return 0; }
 void  addons_manifesto_lido(int i, const char *corpo) { (void)i; (void)corpo; }
 char *rede_baixar(const char *u, int t)    {
   (void)t;
@@ -138,6 +142,9 @@ static const Falso BROTHERS[] = {
   { "tt10986410:1:2", 1, 0, 900100,  -8 },
   { "tt8599532:1:2",  1, 0, 900000,  -9 },
 };
+static const Falso MONSTROS[] = {
+  { "tt13207736:3:2", 0, 42, 990000, 0 },
+};
 static const Falso *tabela = FALSO;
 static int semDataPrimeiro;   // 1 = o primeiro da tabela vem sem `released`
 static int nTabela = (int)(sizeof FALSO / sizeof *FALSO);
@@ -156,8 +163,8 @@ int trakt_continuar(CatItem *s, int m) {
     snprintf(s[i].imdb, sizeof s[i].imdb, "%s", f->id);
     snprintf(s[i].titulo, sizeof s[i].titulo, "English title");
     snprintf(s[i].sinopse, sizeof s[i].sinopse, "English description");
-    snprintf(s[i].tipo, sizeof s[i].tipo, "%s", f->seguir ? "series" : "movie");
-    if (f->seguir) sscanf(strchr(f->id, ':') + 1, "%d:%d", &s[i].temporada, &s[i].episodio);
+    snprintf(s[i].tipo, sizeof s[i].tipo, "%s", strchr(f->id, ':') ? "series" : "movie");
+    if (strchr(f->id, ':')) sscanf(strchr(f->id, ':') + 1, "%d:%d", &s[i].temporada, &s[i].episodio);
     s[i].progresso = f->prog;
     s[i].retomadoMs = f->quando;
     // O que trakt.c faz no enfeite, com o `released` do Cinemeta.
@@ -291,6 +298,50 @@ int main(void) {
     addonDisponivel = 0;
     assert(montarContinuar(lote, CONT_MAX, NULL) == 0);
     puts("ok  sem addon, nenhum titulo em ingles e publicado"); }
+  // A serie principal pode nao ter /meta no addon, mas os cards dos arcos
+  // estao no catalogo. O episodio S3E2 deve usar o card de Ed Gein, mesmo
+  // quando a colecao tambem contem o arco Menendez da temporada 2.
+  { CatItem arcos[2] = {0}, lote[CONT_MAX];
+    ProgRegistro regs[4], legado = {0};
+    snprintf(arcos[0].imdb, sizeof arcos[0].imdb, "ttArcoMenendez");
+    snprintf(arcos[0].titulo, sizeof arcos[0].titulo, "Monstros: Menendez");
+    snprintf(arcos[0].poster, sizeof arcos[0].poster, "menendez.jpg");
+    snprintf(arcos[0].imdbFonte, sizeof arcos[0].imdbFonte, "tt13207736");
+    arcos[0].temporadaFonte = 2;
+    snprintf(arcos[1].imdb, sizeof arcos[1].imdb, "ttArcoGein");
+    snprintf(arcos[1].titulo, sizeof arcos[1].titulo, "Monstro: Ed Gein");
+    snprintf(arcos[1].poster, sizeof arcos[1].poster, "gein.jpg");
+    snprintf(arcos[1].imdbFonte, sizeof arcos[1].imdbFonte, "tt13207736");
+    arcos[1].temporadaFonte = 3;
+    for (int i = 0; i < 2; i++) snprintf(arcos[i].tipo, sizeof arcos[i].tipo, "series");
+    prog_invalidar();
+    cat_definir_tudo(NULL, 0, NULL, 0);
+    tabela = MONSTROS; nTabela = 1;
+    fonteTeste = AJ_CWF_TRAKT;
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 0);
+    cat_definir_tudo(arcos, 2, NULL, 0);
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].imdb, "tt13207736:3:2"));
+    assert(!strcmp(lote[0].titulo, "Monstro: Ed Gein"));
+    assert(!strcmp(lote[0].poster, "gein.jpg") && lote[0].temporadaFonte == 3);
+    puts("ok  Monstros S3 usa o card de Ed Gein sem meta do addon");
+
+    cat_salvar_progresso_ep(1, 1200, 3000, 3, 2);
+    assert(prog_ler(regs, 4) == 1 && !strcmp(regs[0].contentId, "tt13207736"));
+    cat_definir_tudo(arcos, 2, NULL, 0);
+    assert(cat_item(0)->progresso == 0 && cat_item(1)->progresso == 40);
+    puts("ok  progresso do arco grava a serie principal e reaparece so na temporada certa");
+
+    prog_invalidar();
+    snprintf(legado.contentId, sizeof legado.contentId, "ttArcoGein");
+    legado.temporada = 3; legado.episodio = 2;
+    legado.posSeg = 1200; legado.durSeg = 3000; legado.lastWatchedMs = 990001;
+    assert(prog_aplicar_remoto(&legado));
+    fonteTeste = AJ_CWF_CONTA;
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].imdb, "tt13207736:3:2"));
+    assert(!strcmp(lote[0].titulo, "Monstro: Ed Gein"));
+    puts("ok  progresso antigo pelo ID do arco entra no Continuar assistindo"); }
   puts("cwordem_desc: tudo ok");
   return 0;
 }

@@ -171,13 +171,8 @@ static CatHistorico historico[CAT_MAX];
 static int nHistorico;
 
 static void id_base(const char *origem, char *destino, size_t tam) {
-  size_t n = 0;
   if (!destino || tam == 0) return;
-  if (origem) {
-    while (origem[n] && origem[n] != ':' && n + 1 < tam) n++;
-    memcpy(destino, origem, n);
-  }
-  destino[n] = 0;
+  prog_content_id(destino, (unsigned)tam, origem, NULL, NULL);
 }
 
 static const char *tipo_base(const char *tipo) {
@@ -971,7 +966,13 @@ static int aplicarProgressoDoDisco(void) {
   for (i = 0; i < k; i++) {
     int j;
     for (j = 0; j < m; j++) {
-      if (tocado[j] || !itens[j].imdb[0] || !mesmoTitulo(itens[j].imdb, regs[i].contentId)) continue;
+      int card, arco;
+      if (tocado[j] || !itens[j].imdb[0]) continue;
+      card = mesmoTitulo(itens[j].imdb, regs[i].contentId);
+      arco = itens[j].imdbFonte[0] && itens[j].temporadaFonte > 0 &&
+             itens[j].temporadaFonte == regs[i].temporada &&
+             mesmoTitulo(itens[j].imdbFonte, regs[i].contentId);
+      if (!card && !arco) continue;
       // O ITEM QUE JA E MAIS NOVO QUE O DISCO NAO VOLTA NO TEMPO. O item do
       // Trakt (pausado ou "a seguir", issue #66) traz o instante em
       // retomadoMs; um registro local mais velho — o S1E1 a 3% de 8/9 quando
@@ -982,7 +983,8 @@ static int aplicarProgressoDoDisco(void) {
       cat_aplicar_progresso(j, regs[i].posSeg, regs[i].durSeg, regs[i].temporada, regs[i].episodio);
       tocado[j] = 1;
       aplicados++;
-      break;
+      // A mesma temporada pode ter um card da serie principal e outro do
+      // arco. Ambos precisam mostrar o episodio; os outros arcos nao.
     }
   }
   free(tocado);
@@ -1156,7 +1158,7 @@ void cat_salvar_progresso_ep(int indice, double posSeg, double durSeg, int tempo
   // O arquivo e de progresso.c: chave igual a do web, pendente, com hora. O
   // imdb do item pode vir composto ("tt123:4:9", itens do Trakt) — a funcao
   // corta e usa o episodio explicito quando ha.
-  if (!prog_gravar_local(itens[indice].imdb, temporada, episodio, posSeg, durSeg)) return;
+  if (!prog_gravar_local(cat_id_fonte(&itens[indice]), temporada, episodio, posSeg, durSeg)) return;
   cat_aplicar_progresso(indice, posSeg, durSeg, temporada, episodio);
 }
 

@@ -35,20 +35,33 @@ void prog_invalidar(void) { TRANCAR(); carregado = 0; nRegs = 0; DESTRANCAR(); }
 // ------------------------------------------------------------ identidade (sem estado)
 
 void prog_content_id(char *dst, unsigned n, const char *imdb, int *temporada, int *episodio) {
-  const char *dp;
+  const char *ultimo, *anterior = NULL, *p;
+  char *fim;
+  long t = 0, e = 0;
   if (!dst || !n) return;
   dst[0] = 0;
   if (!imdb) return;
-  dp = strchr(imdb, ':');
-  if (dp) {
-    unsigned L = (unsigned)(dp - imdb);
+  // So ":temporada:episodio" e um sufixo de progresso. IDs de catalogo
+  // como "tmdb:123" ou "cs:channel:..." conservam todos os seus segmentos.
+  ultimo = strrchr(imdb, ':');
+  if (ultimo) for (p = ultimo; p > imdb; ) {
+    --p;
+    if (*p == ':') { anterior = p; break; }
+  }
+  if (anterior) {
+    t = strtol(anterior + 1, &fim, 10);
+    if (fim != ultimo || t < 0 || t > 9999) anterior = NULL;
+    else {
+      e = strtol(ultimo + 1, &fim, 10);
+      if (*fim || e <= 0 || e > 99999) anterior = NULL;
+    }
+  }
+  if (anterior) {
+    unsigned L = (unsigned)(anterior - imdb);
     if (L >= n) L = n - 1;
     memcpy(dst, imdb, L);
     dst[L] = 0;
-    if (temporada && episodio) {
-      int t = 0, e = 0;
-      if (sscanf(dp + 1, "%d:%d", &t, &e) == 2 && t >= 0 && e > 0) { *temporada = t; *episodio = e; }
-    }
+    if (temporada && episodio) { *temporada = (int)t; *episodio = (int)e; }
   } else {
     snprintf(dst, n, "%s", imdb);
   }

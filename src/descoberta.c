@@ -2131,17 +2131,27 @@ static int continuarLocal(CatItem *saida, int max) {
   k = prog_ler(regs, PROG_MAX);
   for (i = 0; i < k && n < max; i++) {
     const ProgRegistro *r = &regs[i];
+    const char *id = r->contentId;
     CatItem *d;
     double p;
     int j, repetido = 0;
     if (r->durSeg < 60.0) continue;
     p = r->posSeg / r->durSeg;
     if (p < 0.01 || p >= 0.90) continue;
+    // Registros gravados antes do alias usavam o ID do card de cada arco.
+    // Ao ler, reunimos esse progresso sob a serie principal e a temporada
+    // correspondente, sem perder a posicao que a pessoa ja tinha.
+    if (r->episodio > 0) {
+      int indice = cat_indice_por_imdb(r->contentId);
+      const CatItem *card = indice >= 0 ? cat_item(indice) : NULL;
+      if (card && card->imdbFonte[0] && card->temporadaFonte == r->temporada)
+        id = card->imdbFonte;
+    }
     // Uma serie com varios episodios gravados entra UMA vez, no mais recente.
     for (j = 0; j < n; j++) {
-      const char *dp = strchr(saida[j].imdb, ':');
-      size_t L = dp ? (size_t)(dp - saida[j].imdb) : strlen(saida[j].imdb);
-      if (L == strlen(r->contentId) && !strncmp(saida[j].imdb, r->contentId, L)) { repetido = 1; break; }
+      char anterior[24];
+      prog_content_id(anterior, sizeof anterior, saida[j].imdb, NULL, NULL);
+      if (!strcmp(anterior, id)) { repetido = 1; break; }
     }
     if (repetido) continue;
     d = &saida[n];
@@ -2154,11 +2164,11 @@ static int continuarLocal(CatItem *saida, int max) {
     if (r->episodio > 0) {
       d->temporada = r->temporada;
       d->episodio  = r->episodio;
-      snprintf(d->imdb, sizeof d->imdb, "%s:%d:%d", r->contentId,
+      snprintf(d->imdb, sizeof d->imdb, "%s:%d:%d", id,
                r->temporada ? r->temporada : 1, r->episodio);
       snprintf(d->tipo, sizeof d->tipo, "series");
     } else {
-      snprintf(d->imdb, sizeof d->imdb, "%s", r->contentId);
+      snprintf(d->imdb, sizeof d->imdb, "%s", id);
       snprintf(d->tipo, sizeof d->tipo, "movie");
     }
     n++;
@@ -2405,6 +2415,54 @@ static void localizarContinuar(CatItem *itens, int n, unsigned char *localizados
   if (job.encontrados)
     printf("[desc] continuar assistindo: %d metadado(s) do addon %s\n",
            job.encontrados, addons_nome(melhor));
+}
+
+// Os episodios de uma antologia usam o ID da serie principal, mas o catalogo
+// guarda os arcos como cards separados. O meta do addon pode nem ter a serie
+// principal; e, quando tem, o titulo/arte dela escondem qual arco foi visto.
+// Preferir o card da temporada. Para os demais titulos, o catalogo so serve de
+// reserva se o addon de metadados nao encontrou o item.
+static int metaContinuarDoCatalogo(CatItem *it, int preferirArco) {
+  char id[24];
+  int escolhido = -1;
+  CatItem antigo;
+  prog_content_id(id, sizeof id, it->imdb, NULL, NULL);
+  if (!id[0]) return 0;
+  if (preferirArco && it->temporada > 0)
+    for (int j = 0; j < cat_n(); j++) {
+      const CatItem *c = cat_item(j);
+      if (c && c->imdbFonte[0] && !strcmp(c->imdbFonte, id) &&
+          c->temporadaFonte == it->temporada && c->titulo[0] &&
+          (c->poster[0] || c->backdrop[0])) { escolhido = j; break; }
+    }
+  if (escolhido < 0 && !preferirArco)
+    escolhido = cat_indice_por_imdb(id);
+  if (escolhido < 0) return 0;
+  const CatItem *card = cat_item(escolhido);
+  if (!card || !card->titulo[0] || (!card->poster[0] && !card->backdrop[0])) return 0;
+  antigo = *it;
+  *it = *card;
+  snprintf(it->imdb, sizeof it->imdb, "%s", antigo.imdb);
+  snprintf(it->tipo, sizeof it->tipo, "%s", antigo.tipo);
+  it->progresso = antigo.progresso;
+  it->temporada = antigo.temporada;
+  it->episodio = antigo.episodio;
+  it->retomadoMs = antigo.retomadoMs;
+  if (antigo.restanteMin > 0) it->restanteMin = antigo.restanteMin;
+  if (antigo.nomeEpisodio[0])
+    snprintf(it->nomeEpisodio, sizeof it->nomeEpisodio, "%s", antigo.nomeEpisodio);
+  return 1;
+}
+
+static void complementarContinuarDoCatalogo(CatItem *itens, int n,
+                                             unsigned char *localizados) {
+  for (int i = 0; i < n; i++) {
+    if (metaContinuarDoCatalogo(&itens[i], 1)) {
+      localizados[i] = 1;
+    } else if (!localizados[i] && metaContinuarDoCatalogo(&itens[i], 0)) {
+      localizados[i] = 1;
+    }
+  }
 }
 
 // Um candidato da fileira, com o que se sabe sobre QUANDO ele aconteceu.
@@ -2675,6 +2733,7 @@ static int montarContinuar(CatItem *saida, int max, unsigned char *localizados) 
       saida[i].nota = saida[i].restanteMin = 0;
     }
     localizarContinuar(saida, nJ, vindosDoAddon);
+    complementarContinuarDoCatalogo(saida, nJ, vindosDoAddon);
     for (i = 0; i < nJ; i++) if (vindosDoAddon[i]) {
       if (w != i) saida[w] = saida[i];
       if (localizados) localizados[w] = 1;
@@ -4000,6 +4059,16 @@ static void *montar(void *u) {
   free(lote);
   listasAbandonar(listas);   // so sobra se o lote veio vazio antes de usa-las
   buscando = 0;
+  // O Continuar assistindo foi montado antes dos catalogos desta rodada. Se
+  // um deles trouxe um arco de antologia, agora ja existe arte/metadado local
+  // para localizar o progresso da serie principal que antes ficou pendente.
+  for (int arco = 0; arco < cat_n(); arco++) {
+    const CatItem *it = cat_item(arco);
+    if (it && it->imdbFonte[0] && it->temporadaFonte > 0) {
+      desc_refazer_continuar();
+      break;
+    }
+  }
   // Um pedido que chegou COM o ciclo no ar roda agora, com as credenciais que
   // entraram no meio do caminho. Zerar a marca antes de disparar evita que uma
   // falha de pthread_create deixe o pedido preso para sempre.

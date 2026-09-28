@@ -12,6 +12,7 @@
 #include "diretor.h"
 #include "addons.h"
 #include "nuvem.h"
+#include "seriealias.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -235,17 +236,22 @@ void vertudo_evento(const SDL_Event *e) {
     // possa abri-lo por indice, que e como todo o app trabalha.
     CatItem it;
     if (viewItem(foco, &it)) {
+      // Fontes de colecao diferentes podem entregar o mesmo arco por IMDb ou
+      // TMDB. Aplique o mapa antes de escolher entre abrir e resolver o ID.
+      seriealias_aplicar(&it);
       // Item de fonte TMDB (issue #44): o id e "tmdb:<n>", nao imdb. Quem
       // resolve e o caminho sob-demanda ja usado pela filmografia de elenco:
       // external_ids -> imdb -> meta do Cinemeta -> cat_acrescentar, e o
       // desc_titulo_pronto do loop principal abre o detalhe.
-      if (!strncmp(it.imdb, "tmdb:", 5)) {
+      // A antologia ja veio com card, arte e ID da serie principal. Resolver
+      // o tmdb: do arco de novo descarta essa identidade e pode nao abrir nada.
+      if (!strncmp(it.imdb, "tmdb:", 5) && !it.imdbFonte[0]) {
         desc_pedir_titulo_tmdb(atol(it.imdb + 5),
                                !strcmp(it.tipo, "series") ? "tv" : "movie");
       } else {
         int idx = it.imdb[0] ? cat_indice_por_imdb(it.imdb) : -1;
         if (idx < 0) idx = cat_acrescentar(&it);
-        if (idx >= 0) { pedAbrir = idx; } // conserva a lista e a posição ao voltar
+        if (idx >= 0) pedAbrir = idx; // conserva a lista e a posição ao voltar
       }
     }
   }
