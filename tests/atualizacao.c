@@ -79,16 +79,15 @@ int main(int argc, char **argv) {
     CONFERE(j != NULL, "release atual no catálogo");
     if (j) {
       CONFERE(textoJson(j, "tag_name", tag, sizeof tag), "tag da release atual");
-      CONFERE(!strcmp(tag, "v1.5.15"), "versão publicada: %s", tag);
+      CONFERE(!strcmp(tag, "v1.5.20"), "versão publicada: %s", tag);
       CONFERE(textoJson(j, "body", body, sizeof body), "body da release atual");
       limparNotas(body, notas, sizeof notas);
-      CONFERE(strstr(notas, "\001Navegação e visual") != NULL, "seção de navegação íntegra");
-      CONFERE(strstr(notas, "\001Busca e Explorar") != NULL, "seção de Busca íntegra");
-      CONFERE(strstr(notas, "\001Fontes e plugins") != NULL, "seção de fontes íntegra");
-      CONFERE(strstr(notas, "\001Contas e reprodução") != NULL, "última seção não foi cortada");
-      CONFERE(strstr(notas, "prévia ao avançar o vídeo") != NULL, "último item não foi cortado");
+      CONFERE(strstr(notas, "\001Temporadas e fontes de Monstros") != NULL, "seção de Monstros íntegra");
+      CONFERE(strstr(notas, "\001Catálogos com IDs próprios") != NULL, "seção de catálogos íntegra");
+      CONFERE(strstr(notas, "\001Instalação e verificação") != NULL, "última seção não foi cortada");
+      CONFERE(strstr(notas, "chaves privadas") != NULL, "último item não foi cortado");
       CONFERE(acharIpk(j, url, sizeof url, hash, sizeof hash, AT_SUFIXO), "IPK da release atual encontrado");
-      CONFERE(strstr(url, "1.5.15_arm.ipk") != NULL, "URL do IPK atual: %s", url);
+      CONFERE(strstr(url, "1.5.20_arm.ipk") != NULL, "URL do IPK atual: %s", url);
       CONFERE(strlen(hash) == 64, "SHA-256 do IPK atual: %s", hash);
       free(j);
     } }
