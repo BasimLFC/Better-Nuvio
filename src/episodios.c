@@ -112,7 +112,7 @@ static void menuAbrir(int idx, int t, int e, const char *nome, int so) {
     } }
   // O SENTIDO SAI DO ESTADO: quem esta olhando um episodio visto quer
   // desmarcar. Desconhecido (-1) conta como nao visto.
-  vmVisto = vistoep_estado(ci->imdb, t, e) == 1 ? 0 : 1;
+  vmVisto = vistoep_estado(cat_id_fonte(ci), t, e) == 1 ? 0 : 1;
   // vmConsumir FICA EM ZERO. O menu abre no KEYUP da pressao longa — o OK que
   // o abriu ja foi SOLTO quando se chega aqui — e com 1 o proximo KEYDOWN, que
   // e a escolha de verdade, era engolido como se fosse esse soltar. Era o
@@ -184,7 +184,7 @@ static int montarLote(int idx, int modo, int t, int e, VistoPar *saida, int max)
     cat[nc].episodio = (short)ce->episodio;
     nc++;
   }
-  return vistoep_lote(ci->imdb, modo == VM_ATE, t, e, cat, nc,
+  return vistoep_lote(cat_id_fonte(ci), modo == VM_ATE, t, e, cat, nc,
                       extras_agenda_temporada(), extras_agenda_episodio(),
                       saida, max);
 }
@@ -207,9 +207,9 @@ static int aplicarVisto(int modo, int visto) {
   // coisa dentro da folha, e fora dela nao ha aba nenhuma.
   n = montarLote(vmIdx, modo, vmT, vmE, lote, VM_LOTE);
   if (n < 1) return 0;
-  mudou = vistoep_marcar_lote(ci->imdb, lote, n, visto);
+  mudou = vistoep_marcar_lote(cat_id_fonte(ci), lote, n, visto);
   if (!mudou) return 0;
-  visto_episodios(ci->imdb, ci->tipo[0] ? ci->tipo : "series", lote, n, visto,
+  visto_episodios(cat_id_fonte(ci), ci->tipo[0] ? ci->tipo : "series", lote, n, visto,
                   visto_destinos());
   return mudou;
 }
@@ -228,7 +228,7 @@ static void menuAbrirTemporada(int idx, int t, int so) {
   snprintf(vmThumb, sizeof vmThumb, "%s", ci->backdrop);
   n = montarLote(idx, VM_TEMP, t, 0, lote, VM_LOTE);
   for (i = 0; i < n; i++)
-    if (vistoep_estado(ci->imdb, lote[i].temporada, lote[i].episodio) == 1) vistos++;
+    if (vistoep_estado(cat_id_fonte(ci), lote[i].temporada, lote[i].episodio) == 1) vistos++;
   vmFoco = (n > 0 && vistos == n) ? VT_DESMARCAR : VT_MARCAR;
 }
 
@@ -704,7 +704,7 @@ void episodios_desenhar(void) {
     // agora, que a pessoa ja esta vendo. Sem copia pronta, fica o fundo.
     if(tex&&ajustes_desfocar_nao_assistidos()&&
        !(ep->temporada==atualT&&ep->episodio==atualE)&&
-       !(ci&&vistoep_estado(ci->imdb,ep->temporada,ep->episodio)==1))
+       !(ci&&vistoep_estado(cat_id_fonte(ci),ep->temporada,ep->episodio)==1))
       tex=gfx_desfocado(tex,arte);
     if(tex){gfx_tex_aspect_atual=tex_aspecto(arte);gfx_rect(tr,tex,GFX_CARD,0,0,0,.10f,0,0,0,anim);gfx_tex_aspect_atual=0;}
     char num[40];snprintf(num,sizeof num,i18n("T%dE%d"),ep->temporada,ep->episodio);

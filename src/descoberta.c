@@ -11,6 +11,7 @@
 #include "marco.h"
 #include <SDL2/SDL.h>
 #include "catalogo.h"
+#include "seriealias.h"
 #include "addons.h"
 #include "rede.h"
 #include "nuvem.h"
@@ -943,6 +944,7 @@ static int deMeta(const char *ini, const char *fim, const char *tipo, CatItem *d
   { double nota = js_num(ini, fim, "imdbRating", 0.0);
     d->nota = (int)(nota * 10.0 + 0.5) / 1; }
   if (d->nota > 99) d->nota /= 10;
+  seriealias_aplicar(d);
   return 1;
 }
 
@@ -4513,15 +4515,43 @@ static int publicarEpisodios(const char *corpo, int alvoItem, const char *titulo
   return n;
 }
 
+// Para IDs proprios de add-on (tmdb:, tvdb:, kitsu:...), a ficha de episodios
+// deve vir de quem declara /meta/series. Cinemeta so aceita IDs IMDb. Validar
+// o ID da resposta evita usar a ficha de outro titulo se um add-on reaproveitar
+// a mesma rota ou responder com um fallback generico.
+static char *metaSerieDosAddons(const char *id) {
+  int preferido = addonMetaPreferido();
+  for (int passo = -1; passo < addons_n(); passo++) {
+    int i = passo < 0 ? preferido : passo;
+    char url[ADD_URL_MAX + 96], respostaId[64] = "";
+    char *corpo;
+    const char *meta, *obj, *fim;
+    if (i < 0 || (passo >= 0 && i == preferido) || !addons_tem_meta(i) ||
+        contemSemCaixa(addons_base(i), "cinemeta.strem.io")) continue;
+    if (snprintf(url, sizeof url, "%s/meta/series/%s.json",
+                 addons_base(i), id) >= (int)sizeof url) continue;
+    corpo = rede_baixar(url, 8);
+    if (!corpo) continue;
+    meta = strstr(corpo, "\"meta\"");
+    obj = meta ? strchr(meta, '{') : NULL;
+    fim = obj ? js_fim(obj) : NULL;
+    if (obj && fim) js_texto_raiz_em(obj, fim, "id", respostaId, sizeof respostaId);
+    if (obj && respostaId[0] && !strcmp(respostaId, id) &&
+        desc_meta_tem_temporadas(corpo)) return corpo;
+    free(corpo);
+  }
+  return NULL;
+}
+
 static void *buscarEps(void *u) {
   int alvoItem = epItem;
   const CatItem *orig = cat_item(alvoItem);
   CatItem base;
   const CatItem *it;
   char url[600], *corpo = NULL;
-  char serie[24];
+  char serie[64];
   (void)u;
-  if (!orig || !orig->imdb[0]) { fioEpVivo = 0; return NULL; }
+  if (!orig || !cat_id_fonte(orig)[0]) { fioEpVivo = 0; return NULL; }
   // CANAL NAO PASSA AQUI. O Cinemeta so conhece filme/serie por id do IMDb
   // ("tt..."); id de canal e "cs:channel:<hash>". "ehFilme = tipo != series"
   // tratava canal como filme, pedia /meta/movie/<id> com um id que o
@@ -4535,10 +4565,8 @@ static void *buscarEps(void *u) {
   // pagina do filme abria sem a fileira. O que e so de serie (episodios,
   // temporadas) e pulado abaixo.
   //
-  // O Cinemeta so conhece id do IMDb. "kitsu:123"/"mal:456" (addons de anime)
-  // eram cortados no ':' e pedidos como /meta/movie/kitsu.json — e "kitsu"
-  // virava a chave de cache de TODOS eles, o mesmo vazamento do #37.
-  if (strncmp(orig->imdb, "tt", 2)) { fioEpVivo = 0; return NULL; }
+  // Cinemeta so conhece IDs IMDb. IDs proprios dos addons seguem para a rota
+  // /meta/series deles; o prefixo ate ':' nao e um titulo nem chave de cache.
   // TIPO INCERTO ("anime" de catalogo do AIOMetadata, ou qualquer outro que
   // nao seja filme nem serie) NAO VIRA FILME POR PADRAO: pergunta como serie
   // e, sem temporada nenhuma, como filme. O que o /meta responder decide, e
@@ -4549,11 +4577,11 @@ static void *buscarEps(void *u) {
   base = *orig;
   it = &base;
   { const char *dp;
-    snprintf(serie, sizeof serie, "%s", it->imdb);
-    dp = strchr(serie, ':');
+    snprintf(serie, sizeof serie, "%s", cat_id_fonte(it));
+    dp = !strncmp(serie, "tt", 2) ? strchr(serie, ':') : NULL;
     if (dp) *(char *)dp = 0; }
 
-  for (ti = 0; ti < nTipos; ti++) {
+  for (ti = 0; !strncmp(serie, "tt", 2) && ti < nTipos; ti++) {
     char chave[40];
     int ultimo = ti == nTipos - 1;
     // A CHAVE DO CACHE LEVA O TIPO. Era so o id, e /meta/movie/tt13293588 e
@@ -4573,7 +4601,23 @@ static void *buscarEps(void *u) {
     ehFilme = strcmp(tipos[ti], "series") != 0;
     if (ultimo || desc_meta_tem_temporadas(corpo)) break;
   }
+  if (strcmp(base.tipo, "movie") &&
+      (!corpo || !desc_meta_tem_temporadas(corpo))) {
+    free(corpo);
+    corpo = metaSerieDosAddons(serie);
+    if (corpo) { ehFilme = 0; nTipos = 1; }
+  }
   if (!corpo) { fioEpVivo = 0; return NULL; }
+  if (!base.imdbFonte[0]) {
+    const char *m = strstr(corpo, "\"meta\"");
+    const char *obj = m ? strchr(m, '{') : NULL;
+    const char *fim = obj ? js_fim(obj) : NULL;
+    char imdbReal[sizeof base.imdbFonte] = "";
+    if (obj && fim &&
+        js_texto_raiz_em(obj, fim, "imdb_id", imdbReal, sizeof imdbReal) &&
+        imdbReal[0] == 't' && imdbReal[1] == 't')
+      snprintf(base.imdbFonte, sizeof base.imdbFonte, "%s", imdbReal);
+  }
   if (nTipos > 1) {
     const char *resolvido = ehFilme ? "movie" : "series";
     printf("[desc] %s: tipo '%s' do catalogo resolvido como '%s' pelo /meta\n",
@@ -4688,6 +4732,7 @@ static void *buscarEps(void *u) {
     // serie, para nao atrasar seu titulo e sua arte.
     CatEp *epsLocalizados = NULL;
     int nEpsLocalizados = 0, tmdbIdResolvido = 0;
+    long tmdbIdSerie = 0;
     char nomeAntes[sizeof edit.nomeEpisodio] = "";
     const char *chaveEps = desc_chave_tmdb();
     if (!ehFilme) {
@@ -4716,7 +4761,10 @@ static void *buscarEps(void *u) {
       }
     }
     if (epsLocalizados && ajustes_tmdb_eps() && chaveEps[0]) {
-      long tmdbId = edit.tmdb;
+      // Um card de arco pode ter o TMDB daquele arco, enquanto os episodios
+      // do Cinemeta pertencem a serie principal. Resolva o TMDB pelo IMDb
+      // canonico antes de complementar a temporada.
+      long tmdbId = edit.imdbFonte[0] ? 0 : edit.tmdb;
       if (tmdbId <= 0) {
         char urlFind[400];
         char *respFind;
@@ -4731,7 +4779,8 @@ static void *buscarEps(void *u) {
         }
       }
       if (tmdbId > 0) {
-        edit.tmdb = tmdbId;
+        tmdbIdSerie = tmdbId;
+        if (!edit.imdbFonte[0]) edit.tmdb = tmdbId;
         tmdbIdResolvido = 1;
         int mudaram = desc_tmdb_buscar_temporadas(
             epsLocalizados, nEpsLocalizados, tmdbId, chaveEps, epTemp, 1);
@@ -4744,7 +4793,7 @@ static void *buscarEps(void *u) {
     }
     { char idBase[24];
       const char *dp;
-      snprintf(idBase, sizeof idBase, "%s", it->imdb);
+      snprintf(idBase, sizeof idBase, "%s", cat_id_fonte(it));
       dp = strchr(idBase, ':');
       if (dp) *(char *)dp = 0;
       fotosDoElenco(&edit, idBase, !strcmp(it->tipo, "series")); }
@@ -4754,7 +4803,7 @@ static void *buscarEps(void *u) {
     fflush(stdout);
     if (epsLocalizados && tmdbIdResolvido) {
       int mudaram = desc_tmdb_buscar_temporadas(
-          epsLocalizados, nEpsLocalizados, edit.tmdb, chaveEps, epTemp, 0);
+          epsLocalizados, nEpsLocalizados, tmdbIdSerie, chaveEps, epTemp, 0);
       if (mudaram) {
         cat_definir_episodios(alvoItem, epsLocalizados, nEpsLocalizados);
         desc_nome_episodio_atual(&edit, epsLocalizados, nEpsLocalizados,
@@ -4836,6 +4885,7 @@ static int deMetaTmdb(const char *p, const char *f, const char *tipoPadrao,
   snprintf(d->genero, sizeof d->genero, "%s", i18n(rotuloTipoSing(d->tipo)));
   d->nota = (int)(js_num(p, f, "vote_average", 0.0) * 10.0 + 0.5);
   js_texto(p, f, "overview", d->sinopse, sizeof d->sinopse);
+  seriealias_aplicar(d);
   return 1;
 }
 
@@ -5256,13 +5306,18 @@ static void *buscarTitulo(void *arg) {
   }
 
   for (passo = 0; passo < 2 && achou < 0; passo++) {
-    const char *tipo = passo ? "series" : "movie";
+    // O TMDB ja informou se o credito e TV. Perguntar filme primeiro pode
+    // trazer uma obra diferente com o mesmo numero no catalogo de filmes.
+    const char *tipo = sobTmdb > 0 && !strcmp(sobTipo, "tv") ?
+                       (passo ? "movie" : "series") :
+                       (passo ? "series" : "movie");
     snprintf(url, sizeof url, "%s/meta/%s/%s.json", CINEMETA, tipo, id);
     corpo = rede_baixar(url, 20);
     if (!corpo) continue;
     { const char *m = strstr(corpo, "\"meta\"");
       CatItem it;
       if (m && deMeta(m, NULL, tipo, &it)) {
+        if (it.imdb[0] && strcmp(it.imdb, id)) { free(corpo); continue; }
         // O id do proprio pedido manda: o Cinemeta as vezes devolve o campo
         // vazio, e sem ele o titulo entraria no catalogo sem chave e nao
         // poderia ser reaberto nem casar com progresso.

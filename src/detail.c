@@ -52,6 +52,7 @@
 #include "corviva.h"
 #include "trocaarte.h"
 #include "catalogo.h"
+#include "seriealias.h"
 #include "artehero.h"
 #include "recomenda.h"
 #include "recenviar.h"
@@ -430,7 +431,7 @@ static void abrirAudiencia(void) {
       numeros[i] = extras_ep_numero(t, i);
       notas[i]   = extras_ep_nota(t, i);
     }
-    serieaud_abrir(ci->imdb, extras_temporada_numero(t), numeros, notas, n);
+    serieaud_abrir(cat_id_fonte(ci), extras_temporada_numero(t), numeros, notas, n);
     audAberta = 1;
     audTempAberta = extras_temporada_numero(t);
   }
@@ -953,7 +954,8 @@ void detail_abrir(const HomeItem *it) {
   // quem zera o que o titulo anterior publicou (issue #60, ver extras.c).
   { const CatItem *ci = cat_item(idx);
     extrasSerie = ehSerie();
-    extras_pedir(ci ? ci->imdb : "", extrasSerie, ci ? ci->tmdb : 0);
+    extras_pedir(cat_id_fonte(ci), extrasSerie,
+                 ci && !ci->imdbFonte[0] ? ci->tmdb : 0);
     // Pedir agora e o que deixa o trailer pronto quando a pagina assentar.
     // Apple nos dois alvos; IMDb na LG e, na Samsung, so pelo servico de
     // recomendacoes (a API exige Referer, que o navegador nao deixa por, e o
@@ -1000,6 +1002,13 @@ void detail_abrir(const HomeItem *it) {
         col++;
       }
       if (achouCol >= 0) epAncora = achouCol;
+    }
+    if (ci0 && ci0->temporadaFonte > 0 &&
+        !(ci0->progresso > 0 && ci0->progresso < 90)) {
+      temporada = ci0->temporadaFonte - 1;
+      for (int k = 0; k < ci0->nTemporadas; k++)
+        if (ci0->temporadas[k] == ci0->temporadaFonte) { temporada = k; break; }
+      epAncora = 0;
     } }
   int cols[N_SECOES]; for (int i = 0; i < N_SECOES; i++) cols[i] = secaoColunas(i);
   focus_iniciar(&foco, N_SECOES, cols);
@@ -1066,6 +1075,29 @@ static int episodioAlvo(int *temp, int *epis, int *origem) {
     if (temp) *temp = ci->temporada;
     if (epis) *epis = ci->episodio;
     if (origem) *origem = 2;
+    return 1;
+  }
+  // Um card de arco abre a temporada daquele arco, mesmo que o progresso da
+  // serie principal ainda nao tenha chegado do Trakt.
+  if (ci && ci->temporadaFonte > 0) {
+    const CatEp *primeiro = NULL;
+    for (int i = 0; i < cat_n_episodios(idx); i++) {
+      const CatEp *candidato = cat_episodio(idx, i);
+      if (!candidato || candidato->temporada != ci->temporadaFonte) continue;
+      if (!primeiro) primeiro = candidato;
+      if (!extras_ep_visto(candidato->temporada, candidato->episodio)) {
+        if (temp) *temp = candidato->temporada;
+        if (epis) *epis = candidato->episodio;
+        return 1;
+      }
+    }
+    if (primeiro) {
+      if (temp) *temp = primeiro->temporada;
+      if (epis) *epis = primeiro->episodio;
+      return 1;
+    }
+    if (temp) *temp = ci->temporadaFonte;
+    if (epis) *epis = 1;
     return 1;
   }
   // Primeiro nao assistido. So vale quando o Trakt ja respondeu; sem dado
@@ -2090,6 +2122,11 @@ void detail_atualizar(float dt, Uint32 agora) {
   // OK num estudio, que abre o vertudo e deixa esta tela para tras.
   if (saindo) { serieaud_fechar(); seriefrases_fechar(); trocaarte_fechar(); }
   revalidarIdx();
+  { const CatItem *ci = cat_item(idx);
+    if (ci) {
+      CatItem edit = *ci;
+      if (seriealias_aplicar(&edit)) cat_atualizar_item(idx, &edit);
+    } }
   trocaarte_atualizar(dt);
   // OK NA TELA DE ESCOLHA: a arte congelada na abertura (arteFixa/logoFixo)
   // e justamente a que a pessoa acabou de trocar. Solta e pede de novo — com a
@@ -2198,14 +2235,16 @@ void detail_atualizar(float dt, Uint32 agora) {
   { const CatItem *ci = cat_item(idx);
     if (ci && ehSerie() != extrasSerie) {
       extrasSerie = ehSerie();
-      extras_pedir(ci->imdb, extrasSerie, ci->tmdb);
+      extras_pedir(cat_id_fonte(ci), extrasSerie,
+                   ci->imdbFonte[0] ? 0 : ci->tmdb);
     } }
   { unsigned rev = cat_revisao();
     if (rev != revistaVista) {
       revistaVista = rev;
       if (ehSerie() && cat_n_episodios(idx) < 1) {
         const CatItem *ci = cat_item(idx);
-        desc_episodios(idx, ci ? ci->temporada : 0);
+        desc_episodios(idx, ci ? (ci->temporadaFonte > 0 ?
+                                  ci->temporadaFonte : ci->temporada) : 0);
       }
     } }
   sincronizarColunas();
@@ -3377,7 +3416,7 @@ static void contarTemporada(int *total, int *vistos, int *futuros, int *sabe) {
   // ela omite a clausula, porque zero seria uma afirmacao sobre o que ninguem
   // nos contou. O mesmo motivo pelo qual o card nao desenha um selo de "nao
   // assistido" enquanto o Trakt nao responde.
-  *sabe = ci && ci->imdb[0] && vistoep_conhecido(ci->imdb);
+  *sabe = ci && ci->imdb[0] && vistoep_conhecido(cat_id_fonte(ci));
   for (i = 0; i < n; i++) {
     const CatEp *e = cat_episodio(idx, i);
     if (!e || e->temporada != alvo) continue;
@@ -3387,7 +3426,7 @@ static void contarTemporada(int *total, int *vistos, int *futuros, int *sabe) {
     // Trakt aceita marcar qualquer coisa). Sem esta ordem o mesmo episodio
     // seria contado duas vezes e a soma das clausulas passaria do total.
     if (epNaoExibido(e)) { (*futuros)++; continue; }
-    if (*sabe && vistoep_estado(ci->imdb, e->temporada, e->episodio) == 1)
+    if (*sabe && vistoep_estado(cat_id_fonte(ci), e->temporada, e->episodio) == 1)
       (*vistos)++;
   }
 }
@@ -3590,7 +3629,7 @@ static void desenhaEpisodio(GfxRect r, int c, float f, float a, Uint32 agora) {
   // viu custa nada; mostrar nitido o que ela pediu para esconder e o spoiler.
   if (t2 && ajustes_desfocar_nao_assistidos() &&
       !(ep && serie && serie->imdb[0] &&
-        vistoep_estado(serie->imdb, ep->temporada, ep->episodio) == 1)) {
+        vistoep_estado(cat_id_fonte(serie), ep->temporada, ep->episodio) == 1)) {
     GLuint tb = gfx_desfocado(t2, arte);
     // Copia ainda nao gerada (no maximo duas por quadro): o fundo do card, e
     // nunca a arte nitida por um quadro.
@@ -3629,7 +3668,7 @@ static void desenhaEpisodio(GfxRect r, int c, float f, float a, Uint32 agora) {
   // A matriz tambem so guarda o "sim": ela nao distingue "nao viu" de "nao
   // sei", e cortava em silencio a temporada 21 e o episodio 40.
   if (ep && serie && serie->imdb[0] &&
-      vistoep_estado(serie->imdb, ep->temporada, ep->episodio) == 1) {
+      vistoep_estado(cat_id_fonte(serie), ep->temporada, ep->episodio) == 1) {
     float d = 36.0f;
     GfxRect selo = { th.x + th.w - d - 16.0f, th.y + 16.0f, d, d };
     gfx_cor(th, raioTh, 0.0f, 0.0f, 0.0f, 0.22f * a);

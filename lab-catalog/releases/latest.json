@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.19",
-  "body": "## Legendas de texto no webOS\n- Quando o app consegue extrair a faixa ASS embutida em MKV, as falas seguem a fonte Netflix Sans, a cor, o fundo, a sombra, a posição e o tamanho escolhidos em Legendas. A mudança de aparência aparece sem selecionar a faixa de novo.\n- Letreiros posicionados e desenhos ASS continuam com a composição do arquivo para preservar informações visuais da cena. Atraso e opacidade continuam funcionando.\n- As opções de aparência voltaram a ficar disponíveis ao usar ASS. Faixas de texto que o app consegue ler usam seu overlay; as demais seguem os controles de aparência disponíveis no player nativo.\n## Reprodução de teste no Mac\n- O player do Mac agora lista faixas de texto embutidas e permite selecioná-las no menu de legendas. Foram verificados MP4 com mov_text e MKV com SRT e ASS.\n- A legenda embutida selecionada passa pelo overlay do app; buscar outro trecho limpa o texto anterior e aguarda a fala correspondente à nova posição.\n## Compatibilidade e instalação\n- Legendas em imagem, como PGS, legendas gravadas no vídeo e faixas que o webOS só desenha por conta própria não podem receber a fonte do app. O estilo dessas faixas permanece o do vídeo ou do player da TV.\n- O IPK 1.5.19 mantém o ID com.betternuvio.app e atualiza a instalação 1.5.18. O pacote ARM foi conferido sem arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas.\n",
+  "tag_name": "v1.5.20",
+  "body": "## Temporadas e fontes de Monstros\n- Os cards de Ed Gein, Irmãos Menendez e Lizzie Borden agora consultam a antologia Monstros com o ID de série usado pelos add-ons. Eles abrem nas temporadas 3, 2 e 4, respectivamente. O arco de Dahmer corresponde à temporada 1.\n- Cada card conserva o próprio título, imagem e descrição. A lista de temporadas e episódios vem da série principal, e o pedido de fontes inclui o episódio selecionado da temporada correta.\n- Ao retomar ou trocar de episódio, o player renova a lista de fontes para aquele episódio. O progresso assistido também usa a identidade da série principal.\n## Catálogos com IDs próprios\n- Séries identificadas por IDs como tmdb: ou tvdb: agora tentam obter a lista de episódios do add-on de metadados configurado. O ID completo é preservado ao consultar a ficha, sem cortar o prefixo.\n- Quando a ficha informa um IMDb válido, o app usa esse ID para consultar fontes e progresso. A resolução pelo TMDB considera se a obra é série ou filme e recusa uma ficha de outro IMDb.\n## Instalação e verificação\n- O IPK 1.5.20 mantém o ID com.betternuvio.app e atualiza a instalação anterior com esse mesmo ID. Os testes cobriram os quatro arcos da antologia, o carregamento de episódios por add-on e a compilação para Mac e LG webOS.\n- A presença de fontes para cada episódio depende dos add-ons instalados. O pacote foi conferido para não incluir arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.19_arm.ipk",
-      "size": 51907314,
-      "digest": "sha256:28cd064ed22a9b0dbcd55ab81af3e77ba49d5b1c3934da247d1a0f1b03effab4",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.19_arm.ipk"
+      "name": "com.betternuvio.app_1.5.20_arm.ipk",
+      "size": 51908842,
+      "digest": "sha256:e1fec011bb8aa538b4bc01a0400ad9a02ae506879bac3d7d57924eac3131b326",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.20_arm.ipk"
     }
   ]
 }

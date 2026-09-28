@@ -85,6 +85,7 @@
 #include "addons.h"
 #include "idioma.h"
 #include "descoberta.h"
+#include "seriealias.h"
 #include "proximo.h"
 #include "trakt.h"
 #include "visto.h"
@@ -371,6 +372,14 @@ static Uint32 entrandoPerfilEm;
 static void abrirTitulo(const HomeItem *it) {
   const CatItem *c;
   if (!it || !it->arte) return;
+  c = cat_item(it->indice);
+  if (c) {
+    CatItem edit = *c;
+    if (seriealias_aplicar(&edit)) {
+      cat_atualizar_item(it->indice, &edit);
+      c = cat_item(it->indice);
+    }
+  }
   // ITEM COM ID "tmdb:<n>" — resultado de busca de um addon do TMDB (o dono,
   // 20/09/2026: "tem titulos da busca que quando abre nao vem com as artes e
   // informacoes nenhuma"). O detalhe pede tudo ao Cinemeta por imdb, e
@@ -378,10 +387,11 @@ static void abrirTitulo(const HomeItem *it) {
   // addons sem fonte. A resolucao pelo TMDB/Cinemeta continua em segundo
   // plano, mas o detalhe abre ja com a arte do resultado. Se essa consulta
   // falhar, o OK ainda precisa mostrar o titulo escolhido.
-  c = cat_item(it->indice);
-  if (c && !strncmp(c->imdb, "tmdb:", 5) && desc_chave_tmdb() &&
+  if (c && !c->imdbFonte[0] &&
+      (!strncmp(c->imdb, "tmdb:", 5) ||
+       (strncmp(c->imdb, "tt", 2) && c->tmdb > 0)) && desc_chave_tmdb() &&
       desc_chave_tmdb()[0] && !desc_titulo_buscando()) {
-    desc_pedir_titulo_tmdb(atol(c->imdb + 5),
+    desc_pedir_titulo_tmdb(c->tmdb > 0 ? c->tmdb : atol(c->imdb + 5),
                            !strcmp(c->tipo, "series") ? "tv" : "movie");
   }
   detail_abrir(it);
@@ -417,11 +427,19 @@ static void abrirPorIndice(int i) {
 // episodio 1, qualquer que fosse o escolhido.
 static void idDoAlvo(const CatItem *ci, char *dst, size_t n) {
   int t = 0, e = 0;
+  const char *id;
   if (!ci) { if (n) dst[0] = 0; return; }
-  if (!strcmp(ci->tipo, "series") && detail_ep_foco(&t, &e) && t > 0 && e > 0)
-    snprintf(dst, n, "%.*s:%d:%d", (int)strcspn(ci->imdb,":"),ci->imdb, t, e);
+  id = cat_id_fonte(ci);
+  if (!strcmp(ci->tipo, "series")) {
+    if (!detail_ep_foco(&t, &e) || t < 1 || e < 1) {
+      t = ci->temporadaFonte > 0 ? ci->temporadaFonte :
+          ci->temporada > 0 ? ci->temporada : 1;
+      e = ci->episodio > 0 ? ci->episodio : 1;
+    }
+    snprintf(dst, n, "%s:%d:%d", id, t, e);
+  }
   else
-    snprintf(dst, n, "%s", ci->imdb);
+    snprintf(dst, n, "%s", id);
 }
 
 // A tela de Diagnostico foi aberta pelo cartao da 1.4.2, nao por Ajustes.
@@ -448,14 +466,16 @@ static void trocarTela(Tela nova) {
 
 static void alvoPlayer(char *alvo, size_t tam) {
   const CatItem *c = cat_item(player_indice());
+  const char *id;
   int t, e;
   player_episodio_atual(&t, &e);
   // Canal no ar: o id congelado na abertura vence o indice, que uma
   // republicacao do catalogo ja pode ter apontado para outro item.
   if (player_id_canal()[0]) { snprintf(alvo,tam,"%s",player_id_canal()); return; }
   if (!c) { alvo[0] = 0; return; }
-  if (t > 0 && e > 0) snprintf(alvo,tam,"%.*s:%d:%d",(int)strcspn(c->imdb,":"),c->imdb,t,e);
-  else snprintf(alvo,tam,"%s",c->imdb);
+  id = cat_id_fonte(c);
+  if (t > 0 && e > 0) snprintf(alvo,tam,"%s:%d:%d",id,t,e);
+  else snprintf(alvo,tam,"%s",id);
 }
 static void buscarParaPlayer(void) {
   char alvo[64]; alvoPlayer(alvo,sizeof alvo);
@@ -492,7 +512,7 @@ static void idBaseDoTitulo(char *dst, size_t tam) {
   if (player_id_canal()[0]) return;
   c = cat_item(player_aberto() ? player_indice() : detail_indice());
   if (!c || !c->imdb[0]) return;
-  fontepref_id_base(c->imdb, dst, (unsigned)tam);
+  fontepref_id_base(cat_id_fonte(c), dst, (unsigned)tam);
 }
 
 static void abrirFontesDoTitulo(void) {
@@ -1794,7 +1814,7 @@ void app_atualizar(float dt, Uint32 agora) {
         // Tipo incerto ("anime" do AIOMetadata) tambem: e o /meta que diz se
         // e serie, mesmo quando o catalogo ja trouxe elenco.
         if (!strcmp(ci->tipo, "series") || strcmp(ci->tipo, "movie") ||
-            ci->nElenco == 0) desc_episodios(i, 0);
+            ci->nElenco == 0) desc_episodios(i, ci->temporadaFonte);
         // Legendas do OpenSubtitles junto: sao dezenas por titulo e a busca
         // leva segundos. Pedir so quando o dono abre a folha de faixas faria
         // ele esperar de olho numa lista vazia.

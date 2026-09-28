@@ -105,6 +105,11 @@ typedef struct {
   // sozinho com esta mudanca.
   char imdb[64];
   char tipo[8];
+  // Alguns catalogos publicam uma temporada de antologia como titulo proprio.
+  // `imdb` continua sendo a identidade do card; o ID da serie principal e usado
+  // apenas para consultar episodios, fontes e progresso dessa temporada.
+  char imdbFonte[24];
+  int temporadaFonte;
   // Autoria do feed social, separada dos metadados do filme.
   char socialNome[96], socialSlug[128], socialAvatar[768], socialAcao[64];
   // Id do titulo no TMDB, quando a busca por imdb_id ja o resolveu (ver
@@ -125,6 +130,10 @@ typedef struct {
   // dessincroniza ali, em silencio.
   long long retomadoMs;
 } CatItem;
+
+static inline const char *cat_id_fonte(const CatItem *item) {
+  return item && item->imdbFonte[0] ? item->imdbFonte : item ? item->imdb : "";
+}
 
 // Um episodio de serie. Vem de art/episodios.txt, gerado a partir do campo
 // `videos` do Cinemeta (/meta/series/<id>.json) — os mesmos episodios que os

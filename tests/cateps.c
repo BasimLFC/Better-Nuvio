@@ -26,6 +26,7 @@
 // os simbolos que ele pede (addons, rede, trakt...) viram dubles abaixo. Os
 // cat_* NAO viram duble: este arquivo existe exatamente para exercitar os de
 // verdade do catalogo.c.
+#include "../src/seriealias.h"
 #include "../src/descoberta.c"
 #include "../src/progresso.h"
 #include <assert.h>
@@ -123,15 +124,36 @@ int   trakt_enfeitar_lote(CatItem *s, int n) { (void)s; (void)n; return 0; }
 int   trakt_lista(const char *q, CatItem *s, int m) { (void)q; (void)s; (void)m; return 0; }
 int   trakt_social(CatItem *s, int m)      { (void)s; (void)m; return 0; }
 const char *nuvem_trakt_cliente(void)      { return ""; }
-int   addons_n(void)                       { return 0; }
+static int addonTesteAtivo;
+int   addons_n(void)                       { return addonTesteAtivo; }
 int   addons_tem_catalogo(int i)           { (void)i; return 0; }
-const char *addons_base(int i)             { (void)i; return ""; }
+int   addons_tem_meta(int i)               { return addonTesteAtivo && i == 0; }
+const char *addons_base(int i)             { (void)i; return "https://metadata.example.test"; }
+int addons_montar_url(int i, const char *r, char *d, size_t n) {
+  (void)i; (void)r; if (n) d[0] = 0; return 0;
+}
 const char *addons_id_manifesto(int i)     { (void)i; return ""; }
 const char *addons_nome(int i)            { (void)i; return "addon"; }
 unsigned addons_versao(void)             { return 1; }   // estatico no teste
 const char *addons_base_por_id(const char *id) { (void)id; return ""; }
 void  addons_manifesto_lido(int i, const char *corpo) { (void)i; (void)corpo; }
-char *rede_baixar(const char *u, int t)    { (void)u; (void)t; return NULL; }
+static int requisicoesMonstro;
+char *rede_baixar(const char *u, int t) {
+  (void)t;
+  if (strstr(u, "/meta/series/tt13207736.json")) {
+    requisicoesMonstro++;
+    return strdup("{\"meta\":{\"id\":\"tt13207736\",\"name\":\"Monster\","
+                  "\"videos\":["
+                  "{\"season\":1,\"episode\":1,\"name\":\"Dahmer\"},"
+                  "{\"season\":2,\"episode\":1,\"name\":\"Menendez\"},"
+                  "{\"season\":3,\"episode\":1,\"name\":\"Ed Gein\"},"
+                  "{\"season\":4,\"episode\":1,\"name\":\"Lizzie Borden\"}]}}");
+  }
+  if (strstr(u, "/meta/series/tmdb:777.json"))
+    return strdup("{\"meta\":{\"id\":\"tmdb:777\",\"imdb_id\":\"tt0000777\",\"name\":\"Exemplo\","
+                  "\"videos\":[{\"season\":1,\"episode\":1,\"name\":\"Piloto\"}]}}");
+  return NULL;
+}
 char *rede_baixar_com(const char *u, int t, const char *const *c) {
   (void)c; return rede_baixar(u, t); }
 
@@ -322,6 +344,59 @@ int main(void) {
     assert(!strcmp(eps2[1].nome, "Second episode"));
     assert(!eps2[2].nome[0]); }
   puts("ok  addon completa nomes sem chave TMDB nem perder episodios");
+
+  // H) O catalogo lista arcos de Monster separadamente. Cada card conserva
+  // seu proprio ID, mas os episodios e as fontes pertencem a tt13207736.
+  { CatItem arcos[4] = {0};
+    const char *nomes[] = {
+      "Monstro: A História de Jeffrey Dahmer",
+      "Monstros: Irmãos Menendez: Assassinos dos Pais",
+      "Monstro: A História de Ed Gein",
+      "Monstro: A História de Lizzie Borden"
+    };
+    for (int i = 0; i < 4; i++) {
+      snprintf(arcos[i].titulo, sizeof arcos[i].titulo, "%s", nomes[i]);
+      snprintf(arcos[i].imdb, sizeof arcos[i].imdb, "tmdb:%d", 100 + i);
+      snprintf(arcos[i].tipo, sizeof arcos[i].tipo, "series");
+      assert(seriealias_aplicar(&arcos[i]));
+      assert(arcos[i].temporadaFonte == i + 1);
+      assert(!strcmp(cat_id_fonte(&arcos[i]), "tt13207736"));
+      assert(strncmp(arcos[i].imdb, "tmdb:", 5) == 0);
+    }
+    cat_definir_tudo(arcos, 4, NULL, 0);
+    for (int i = 0; i < 4; i++) {
+      epItem = i; epTemp = i + 1; fioEpVivo = 1;
+      buscarEps(NULL);
+      assert(cat_n_episodios(i) == 4);
+      assert(cat_item(i)->nTemporadas == 4);
+      assert(cat_item(i)->temporadaFonte == i + 1);
+      assert(!strcmp(cat_item(i)->imdb, arcos[i].imdb));
+    }
+    assert(requisicoesMonstro == 1);
+    CatItem doc = {0};
+    snprintf(doc.titulo, sizeof doc.titulo, "Ed Gein: Original Psycho");
+    snprintf(doc.tipo, sizeof doc.tipo, "series");
+    assert(!seriealias_aplicar(&doc));
+  }
+  puts("ok  arcos de Monster preservam cards e carregam as quatro temporadas da serie");
+
+  // I) Um ID proprio de add-on conserva o prefixo inteiro na URL /meta.
+  // Cortar no primeiro ':' fazia a busca de episodios morrer antes da rede.
+  { CatItem proprio = {0};
+    addonTesteAtivo = 1;
+    snprintf(proprio.titulo, sizeof proprio.titulo, "Exemplo");
+    snprintf(proprio.imdb, sizeof proprio.imdb, "tmdb:777");
+    snprintf(proprio.tipo, sizeof proprio.tipo, "series");
+    cat_definir_tudo(&proprio, 1, NULL, 0);
+    epItem = 0; epTemp = 1; fioEpVivo = 1;
+    buscarEps(NULL);
+    assert(cat_n_episodios(0) == 1);
+    assert(!strcmp(cat_episodio(0, 0)->nome, "Piloto"));
+    assert(!strcmp(cat_item(0)->imdb, "tmdb:777"));
+    assert(!strcmp(cat_id_fonte(cat_item(0)), "tt0000777"));
+    addonTesteAtivo = 0;
+  }
+  puts("ok  serie com ID proprio recebe episodios do meta do addon");
 
   puts("cateps: tudo ok");
   return 0;

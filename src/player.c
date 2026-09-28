@@ -462,11 +462,12 @@ void player_definir_episodio(int t, int e) {
     }
     return;
   }
-  if (epT < 1) epT = c->temporada > 0 ? c->temporada : 1;
+  if (epT < 1) epT = c->temporada > 0 ? c->temporada :
+                         c->temporadaFonte > 0 ? c->temporadaFonte : 1;
   if (epE < 1) epE = c->episodio > 0 ? c->episodio : 1;
   if (abrindoSessao || epT != episodioAnteriorT || epE != episodioAnteriorE) {
     previaAte = 0;
-    seekr_preparar(c->imdb, c->tmdb, epT, epE);
+    seekr_preparar(cat_id_fonte(c), c->imdbFonte[0] ? 0 : c->tmdb, epT, epE);
   }
   // O acerto de tempo pertence ao episodio reproduzido. Esta funcao pode ser
   // chamada repetidamente para o MESMO episodio enquanto os dados chegam.
@@ -490,10 +491,9 @@ void player_definir_episodio(int t, int e) {
   // segundos de tela de carregamento) em toda reproducao que ja estava certa.
   // E esta funcao e re-chamada por quadro enquanto o nome do episodio nao
   // chega (player_atualizar), entao "sempre" seria a cada quadro.
-  if (c->imdb[0]) {
+  if (cat_id_fonte(c)[0]) {
     char alvo[64];
-    snprintf(alvo, sizeof alvo, "%.*s:%d:%d",
-             (int)strcspn(c->imdb, ":"), c->imdb, epT, epE);
+    snprintf(alvo, sizeof alvo, "%s:%d:%d", cat_id_fonte(c), epT, epE);
     if (!abrindoSessao && stream_n() > 0 && !stream_lista_do_alvo(alvo))
       stream_invalidar("episode changed");
   }
@@ -510,7 +510,7 @@ void player_definir_episodio(int t, int e) {
     }
   }
   if(idx!=introIdx||epT!=introT||epE!=introE){
-    introIdx=idx;introT=epT;introE=epE;intro_pedir(c->imdb,epT,epE);
+    introIdx=idx;introT=epT;introE=epE;intro_pedir(cat_id_fonte(c),epT,epE);
     credAvisado=credFimAvisado=0;credAvisadoEm=0;
   }
 }
@@ -1252,8 +1252,8 @@ void player_encerrar(void) {
     // so aqui deixaria este app discordando dos outros aparelhos do dono.
     if (ci && ci->imdb[0]) {
       char id[64];
-      if (epT > 0 && epE > 0) snprintf(id, sizeof id, "%.*s:%d:%d", (int)strcspn(ci->imdb,":"),ci->imdb, epT, epE);
-      else snprintf(id, sizeof id, "%s", ci->imdb);
+      if (epT > 0 && epE > 0) snprintf(id, sizeof id, "%s:%d:%d", cat_id_fonte(ci), epT, epE);
+      else snprintf(id, sizeof id, "%s", cat_id_fonte(ci));
       trakt_marcar(id, pos, duracaoSeg);
       // O CHECK NA LISTA, LOCALMENTE E AGORA — a outra metade do #100.
       //
@@ -1277,15 +1277,15 @@ void player_encerrar(void) {
       if (concluiu) {
         int dest = visto_destinos() & ~VISTO_TRAKT;
         if (epT > 0 && epE > 0) {
-          if (vistoep_estado(ci->imdb, epT, epE) != 1) {
+          if (vistoep_estado(cat_id_fonte(ci), epT, epE) != 1) {
             VistoPar par = { (short)epT, (short)epE };
-            visto_episodios(ci->imdb, "series", &par, 1, 1, dest);
+            visto_episodios(cat_id_fonte(ci), "series", &par, 1, 1, dest);
           }
         } else if (strcmp(ci->tipo, "series")) {
           visto_titulo(ci->imdb, ci->tipo, NULL, 0, 1, dest);
         }
       }
-      if (concluiu && epT > 0 && epE > 0) vistoep_definir(ci->imdb, epT, epE, 1);
+      if (concluiu && epT > 0 && epE > 0) vistoep_definir(cat_id_fonte(ci), epT, epE, 1);
       // E para a CONTA. Trakt e conta sao dois destinos diferentes: nem todo
       // usuario liga o Trakt, e o progresso do app oficial vem da conta.
       sync_sujar_progresso();
