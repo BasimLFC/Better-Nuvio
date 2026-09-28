@@ -18,11 +18,21 @@
 #include <unistd.h>
 
 static long uploads, gerados;
+static int vermelhoVisto;
 void teste_glGenTextures(GLsizei n, GLuint *t) { static GLuint prox = 1; int i; for (i = 0; i < n; i++) t[i] = prox++; gerados += n; }
 void teste_glDeleteTextures(GLsizei n, const GLuint *t) { (void)n; (void)t; }
 void teste_glBindTexture(GLenum a, GLuint t) { (void)a; (void)t; }
 void teste_glTexImage2D(GLenum a, GLint b, GLint c, GLsizei w, GLsizei h, GLint d, GLenum e, GLenum f, const void *p) {
-  (void)a; (void)b; (void)c; (void)w; (void)h; (void)d; (void)e; (void)f; (void)p; uploads++; }
+  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; uploads++;
+  if (p && w > 0 && h > 0) {
+    const unsigned char *px = p;
+    unsigned long sr = 0, sg = 0, sb = 0;
+    for (int i = 0; i < w * h; i++) if (px[i*4+3] > 32) {
+      sr += px[i*4]; sg += px[i*4+1]; sb += px[i*4+2];
+    }
+    if (sr > 1000 && sr > sg * 2 && sr > sb * 2) vermelhoVisto = 1;
+  }
+}
 void teste_glTexParameteri(GLenum a, GLenum b, GLint c) { (void)a; (void)b; (void)c; }
 float gfx_tex_aspect_atual;
 void gfx_tex_esquecer(GLuint tex) { (void)tex; }
@@ -107,6 +117,14 @@ int main(void) {
   ok(n == 0, "no quadro do salto, nada da fala de 21 s");
   for (k = 0; k < 30 && n <= 0; k++) { quadro(); n = assrender_desenhar(2.0 + k / 60.0, 0, 1.0f, 0, 0, 1920, 1080); }
   ok(n > 0, "a fala de 2,0 s aparece logo depois do salto");
+
+  printf("[6] mudar a cor da fala ASS atualiza o bitmap sem recarregar a faixa\n");
+  assrender_definir_estilo(0, 1, 0xff3030, 0, 5);
+  for (k = 0; k < 30 && !vermelhoVisto; k++) {
+    assrender_desenhar(2.2 + k / 60.0, 0, 1.0f, 0, 0, 1920, 1080);
+    quadro();
+  }
+  ok(vermelhoVisto, "cor escolhida no app aparece nos glifos ASS");
   (void)quadros;
   printf("\n%s (%d falha%s)\n", falhas ? "FALHOU" : "ass_pisca: ok", falhas, falhas == 1 ? "" : "s");
   return falhas ? 1 : 0;

@@ -647,6 +647,7 @@ static const char *prefsArquivo(void) {
 // ajustes.txt, que espelha as chaves de layout do app web. Padrao: Netflix
 // Sans Regular, branco, sem fundo, posicao central e sombra projetada.
 static VideoLegendaEstilo legEstilo = { 100, 0, 0, 5, 2, 0, 0, 0 };
+static void corLegenda(int i, int *r, int *g, int *b);
 static LegSync legSincronia;
 static void zerarAtrasoLegenda(void) {
   legsync_limpar(&legSincronia);
@@ -729,8 +730,12 @@ int player_leg_sincronizar_fala(double posSeg, double inicioFala) {
   return r;
 }
 void player_leg_estilo_mudou(void) {
+  int r, g, b;
   video_legenda_estilo(&legEstilo);
-  assrender_definir_estilo(legEstilo.negrito, legEstilo.borda != 0);
+  corLegenda(legEstilo.cor, &r, &g, &b);
+  assrender_definir_estilo(legEstilo.negrito, legEstilo.borda != 0,
+                           (r << 16) | (g << 8) | b,
+                           legEstilo.fundo, legEstilo.posicao);
   prefsGravar();
 }
 void player_leg_estilo_tocou(int campos) {
@@ -2416,9 +2421,8 @@ static PlrRect areaVideoLegenda(void) {
   return r;
 }
 
-/* Tamanho da folha aplicado ao ASS: 100 % e o padrao do app, e no ASS o
- * padrao e o tamanho que o autor escolheu. O resto e proporcional — tudo
- * cresce junto, como o sub-scale do mpv, sem mexer em cor, borda ou lugar. */
+/* Tamanho da folha aplicado ao ASS: 100 % usa a base do app nas falas; o
+ * resto escala junto com os eventos especiais que mantem o estilo do arquivo. */
 static double escalaFonteAss(void) {
   int pct = legEstilo.tamanho;
   if (pct < 50) pct = 50;
@@ -2427,16 +2431,14 @@ static double escalaFonteAss(void) {
 }
 
 static void desenharLegendaExterna(void){
-  /* ASS completo: libass devolve uma lista de bitmaps por camada, preservando
-   * karaoke, movimento, desenho vetorial, fontes e todas as tags do arquivo.
-   * Da folha, so chegam ao ASS o que nao desmonta o estilo do autor: tamanho
-   * (escala proporcional), opacidade e atraso. Cor, fonte, fundo, posicao e
-   * borda ficam com o arquivo, como no app web desde o 1.2.0 — trocar a cor
-   * apagava o karaoke e as placas coloridas. A folha mostra essas linhas como
-   * preservadas (faixas.c). */
+  /* ASS completo: libass preserva a composicao de placas e efeitos, mas as
+   * falas recebem o mesmo estilo do overlay SRT. */
   int r, g, b;
   assrender_aplicar_invalidacao();
-  assrender_definir_estilo(legEstilo.negrito, legEstilo.borda != 0);
+  corLegenda(legEstilo.cor, &r, &g, &b);
+  assrender_definir_estilo(legEstilo.negrito, legEstilo.borda != 0,
+                           (r << 16) | (g << 8) | b,
+                           legEstilo.fundo, legEstilo.posicao);
   assrender_definir_cor(0, 0, 0, 0);
   if (assrender_ativo()) {
     PlrRect area = areaVideoLegenda();

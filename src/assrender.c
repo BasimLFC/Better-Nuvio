@@ -136,6 +136,7 @@ static double layAplEscala;
 static unsigned assGeracao;
 static int assCorAtiva, assCorR, assCorG, assCorB;
 static int assNegrito, assSombra = 1;
+static int assCorDialogo = 0xffffff, assFundoDialogo, assPosDialogo = 5;
 static unsigned long long assUltimoRenderUs;
 static size_t assBytesQuadro;
 /* Quadro PUBLICADO por ultimo (epoch + geracao): com o `changed` do libass em
@@ -241,18 +242,37 @@ static void ass_aplicar_fontes_locked(void) {
 
 static void ass_aplicar_estilo_locked(void) {
   ASS_Style estilo = {0};
+  int resX = assTrack && assTrack->PlayResX > 0 ? assTrack->PlayResX : 1920;
+  int resY = assTrack && assTrack->PlayResY > 0 ? assTrack->PlayResY : 1080;
+  int r = (assCorDialogo >> 16) & 255;
+  int g = (assCorDialogo >> 8) & 255;
+  int b = assCorDialogo & 255;
+  int fundoAlpha = assFundoDialogo == 4 ? 0 : 255 - assFundoDialogo * 64;
   if (!assRenderer) return;
-  // A preferencia de negrito usa o arquivo Medium, como o overlay SRT. Pedir
-  // Bold=1 faria o provider sintetizar 700 em cima do Regular nesta TV.
+  // O libass aplica estes campos somente a eventos que parecem fala. A base
+  // de 48 px em 1080p e a mesma do overlay SRT; as unidades ASS acompanham
+  // o PlayRes do arquivo. Placas posicionadas e desenhos mantem seus eventos.
   estilo.FontName = assNegrito ? "Netflix Sans Med" : "Netflix Sans";
+  estilo.FontSize = 48.0 * resY / 1080.0;
+  estilo.ScaleX = estilo.ScaleY = 1.0;
+  estilo.Spacing = 0.0;
+  estilo.PrimaryColour = estilo.SecondaryColour =
+      ((unsigned)r << 24) | ((unsigned)g << 16) | ((unsigned)b << 8);
+  estilo.OutlineColour = 0x00000000u;
+  estilo.BackColour = (unsigned)fundoAlpha;
   estilo.Bold = 0;
-  estilo.BorderStyle = 1;
+  estilo.BorderStyle = assFundoDialogo ? 3 : 1;
   estilo.Outline = 0.0;
   estilo.Shadow = assSombra ? 2.0 : 0.0;
+  estilo.Alignment = 2;
+  estilo.MarginL = estilo.MarginR = (int)lround(60.0 * resX / 1920.0);
+  estilo.MarginV = (int)lround((0.08 + (assPosDialogo - 5) * 0.004) * resY);
   ass_set_selective_style_override(assRenderer, &estilo);
   ass_set_selective_style_override_enabled(assRenderer,
-      ASS_OVERRIDE_BIT_FONT_NAME | ASS_OVERRIDE_BIT_ATTRIBUTES |
-      ASS_OVERRIDE_BIT_BORDER);
+      ASS_OVERRIDE_BIT_FONT_NAME | ASS_OVERRIDE_BIT_FONT_SIZE_FIELDS |
+      ASS_OVERRIDE_BIT_COLORS | ASS_OVERRIDE_BIT_ATTRIBUTES |
+      ASS_OVERRIDE_BIT_BORDER | ASS_OVERRIDE_BIT_ALIGNMENT |
+      ASS_OVERRIDE_BIT_MARGINS);
 }
 
 static void ass_iniciar_locked(void) {
@@ -567,6 +587,7 @@ static int ass_carregar(const char *corpo, size_t tamanho, unsigned geracao, int
   }
   if (assTrack) ass_free_track(assTrack);
   assTrack = track;
+  ass_aplicar_estilo_locked();
   assEventos = track->n_events;
   assResolucaoFonte = 0;
   assCoberturaIni = LLONG_MAX; assCoberturaFim = LLONG_MIN;
@@ -720,13 +741,20 @@ void assrender_definir_cor(int enabled, int r, int g, int b) {
   pthread_mutex_unlock(&assFilaTrava);
 }
 
-void assrender_definir_estilo(int negrito, int sombra) {
+void assrender_definir_estilo(int negrito, int sombra, int corRgb,
+                              int fundo, int posicao) {
   negrito = !!negrito; sombra = !!sombra;
+  corRgb &= 0xffffff;
+  if (fundo < 0) fundo = 0; if (fundo > 4) fundo = 4;
+  if (posicao < -20) posicao = -20; if (posicao > 50) posicao = 50;
   pthread_mutex_lock(&assTrava);
-  if (assNegrito == negrito && assSombra == sombra) {
+  if (assNegrito == negrito && assSombra == sombra &&
+      assCorDialogo == corRgb && assFundoDialogo == fundo &&
+      assPosDialogo == posicao) {
     pthread_mutex_unlock(&assTrava); return;
   }
   assNegrito = negrito; assSombra = sombra;
+  assCorDialogo = corRgb; assFundoDialogo = fundo; assPosDialogo = posicao;
   ass_aplicar_estilo_locked();
   pthread_mutex_unlock(&assTrava);
   pthread_mutex_lock(&assFilaTrava);
@@ -957,8 +985,9 @@ int assrender_adicionar_fonte(const char *nome, const void *dados, size_t tamanh
 void assrender_definir_cor(int enabled, int r, int g, int b) {
   (void)enabled; (void)r; (void)g; (void)b;
 }
-void assrender_definir_estilo(int negrito, int sombra) {
-  (void)negrito; (void)sombra;
+void assrender_definir_estilo(int negrito, int sombra, int corRgb,
+                              int fundo, int posicao) {
+  (void)negrito; (void)sombra; (void)corRgb; (void)fundo; (void)posicao;
 }
 void assrender_aplicar_invalidacao(void) {}
 int assrender_desenhar(double posSeg, int atrasoMs, float alpha,

@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 // O teste exercita o decodificador sem uma janela GL; o app real fornece o
 // desenho do quadro com gfx_rect no fio principal.
@@ -23,6 +24,10 @@ int main(int argc, char **argv) {
   assert(mac_video_pronto() && !mac_video_falhou());
   assert(mac_video_largura() == 320 && mac_video_altura() == 180);
   assert(mac_video_duracao() > 4.8 && mac_video_duracao() < 5.2);
+  assert(mac_video_n_legenda() == 1);
+  assert(mac_video_legenda(0));
+  mac_video_escolher_legenda(0);
+  assert(mac_video_legenda_atual() == 0);
 
   SDL_Delay(150);
   double antes = mac_video_pos();
@@ -33,12 +38,17 @@ int main(int argc, char **argv) {
   SDL_Delay(100);
   assert(mac_video_pos() > 1.95 && mac_video_pos() < 2.10);
   mac_video_pausar(0);
-  SDL_Delay(200);
+  SDL_Delay(500);
   assert(mac_video_pos() > 2.15);
+  { char texto[768] = "";
+    assert(mac_video_legenda_nativa(texto, sizeof texto));
+    assert(strstr(texto, "Teste embutido"));
+    mac_video_escolher_legenda(-1);
+    assert(!mac_video_legenda_nativa(texto, sizeof texto)); }
 
   mac_video_parar();
   assert(!mac_video_ativo());
   SDL_Quit();
-  puts("PASS: video Mac abre, decodifica, pausa, busca e encerra");
+  puts("PASS: video Mac abre, decodifica, exibe legenda embutida, pausa, busca e encerra");
   return 0;
 }

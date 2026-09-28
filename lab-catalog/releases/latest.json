@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.18",
-  "body": "## Busca e abertura de títulos\n- Ao escolher um resultado como “Monstros”, o detalhe abre imediatamente com a arte e as informações disponíveis; a resolução do identificador TMDB continua em segundo plano. Uma falha nessa consulta deixa de engolir o OK.\n- O clique do Magic Remote seleciona o cartaz sob o cursor antes de abrir. Se a lista da busca mudar entre o clique e a abertura, o app usa o índice e os dados atuais do título escolhido.\n## Fontes de add-ons\n- Duas instalações com o mesmo nome, como AIOStreams, aparecem separadas como “(1)” e “(2)”. O nome do manifesto não apaga o apelido configurado para cada instalação.\n- No seletor de filmes e séries, as instalações ativas continuam visíveis mesmo quando uma não devolve fontes para aquele título. Ao escolher uma aba vazia, a tela informa que aquele add-on não trouxe fontes. Cada URL continua sendo consultada separadamente.\n## Instalação e integridade\n- O IPK 1.5.18 mantém o ID com.betternuvio.app e atualiza a instalação 1.5.17 no mesmo app.\n- Pacote ARM verificado sem arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas: 51907426 bytes; SHA-256 3ce88528821b0f58d1bd37d38e5cd54f92a40eb45f83f7a8f19f7804ccf3e282.\n",
+  "tag_name": "v1.5.19",
+  "body": "## Legendas de texto no webOS\n- Quando o app consegue extrair a faixa ASS embutida em MKV, as falas seguem a fonte Netflix Sans, a cor, o fundo, a sombra, a posição e o tamanho escolhidos em Legendas. A mudança de aparência aparece sem selecionar a faixa de novo.\n- Letreiros posicionados e desenhos ASS continuam com a composição do arquivo para preservar informações visuais da cena. Atraso e opacidade continuam funcionando.\n- As opções de aparência voltaram a ficar disponíveis ao usar ASS. Faixas de texto que o app consegue ler usam seu overlay; as demais seguem os controles de aparência disponíveis no player nativo.\n## Reprodução de teste no Mac\n- O player do Mac agora lista faixas de texto embutidas e permite selecioná-las no menu de legendas. Foram verificados MP4 com mov_text e MKV com SRT e ASS.\n- A legenda embutida selecionada passa pelo overlay do app; buscar outro trecho limpa o texto anterior e aguarda a fala correspondente à nova posição.\n## Compatibilidade e instalação\n- Legendas em imagem, como PGS, legendas gravadas no vídeo e faixas que o webOS só desenha por conta própria não podem receber a fonte do app. O estilo dessas faixas permanece o do vídeo ou do player da TV.\n- O IPK 1.5.19 mantém o ID com.betternuvio.app e atualiza a instalação 1.5.18. O pacote ARM foi conferido sem arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.18_arm.ipk",
-      "size": 51907426,
-      "digest": "sha256:3ce88528821b0f58d1bd37d38e5cd54f92a40eb45f83f7a8f19f7804ccf3e282",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.18_arm.ipk"
+      "name": "com.betternuvio.app_1.5.19_arm.ipk",
+      "size": 51907314,
+      "digest": "sha256:28cd064ed22a9b0dbcd55ab81af3e77ba49d5b1c3934da247d1a0f1b03effab4",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.19_arm.ipk"
     }
   ]
 }

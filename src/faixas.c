@@ -307,27 +307,11 @@ static const char *const EST_FUNDO[5] = { "Nenhum", "Escuro 25%", "Escuro 50%",
                                           "Escuro 75%", "Escuro 100%" };
 static const char *const EST_OPAC[4]  = { "100%", "75%", "50%", "25%" };
 
-/* Com o ASS desenhado pelo libass, cor, fundo e posicao sao do
- * arquivo: mexer nelas desmontava karaoke e placas (ou nao fazia nada). A
- * linha continua na folha, esmaecida, dizendo por que nao muda — como o app
- * web faz desde o 1.2.0. Tamanho vira escala proporcional; opacidade e atraso
- * valem igual. */
-static int estiloPreservadoAss(int linha) {
-  return assrender_ativo() && (linha == 2 || linha == 4 || linha == 5);
-}
-
 static void valorEstilo(int linha, char *dst, size_t tam) {
   const VideoLegendaEstilo *e = player_leg_estilo();
-  if (estiloPreservadoAss(linha)) {
-    snprintf(dst, tam, "%s", i18n("Preservado pelo ASS"));
-    return;
-  }
   switch (linha) {
     case 0:
-      if (assrender_ativo())
-        snprintf(dst, tam, "%d%% \xc2\xb7 ASS \xc3\x97%.2f", e->tamanho, e->tamanho / 100.0);
-      else
-        snprintf(dst, tam, "%d%%", e->tamanho);
+      snprintf(dst, tam, "%d%%", e->tamanho);
       break;
     case 1: snprintf(dst, tam, "%s", i18n(e->negrito ? "Ligado" : "Desligado")); break;
     case 2: snprintf(dst, tam, "%s", VIDEO_LEG_CORES_PT[e->cor % VIDEO_LEG_NCORES]); break;
@@ -351,7 +335,6 @@ static int voltaIndice(int valor, int delta, int n) {
 
 static void ajustarEstilo(int linha, int dir) {
   VideoLegendaEstilo *e = player_leg_estilo();
-  if (estiloPreservadoAss(linha)) return;
   switch (linha) {
     case 0:
       e->tamanho += dir * 10;
@@ -359,8 +342,7 @@ static void ajustarEstilo(int linha, int dir) {
       if (e->tamanho < 50) e->tamanho = 200;
       break;
     case 1: e->negrito = !e->negrito; break;
-    // COR: marca que a pessoa mexeu — dai em diante ela vence a cor que o
-    // arquivo ASS pede (ver player_leg_estilo_tocou em player.h).
+    // A cor escolhida vale para legendas simples e para as falas ASS.
     case 2: e->cor     = voltaIndice(e->cor,dir,VIDEO_LEG_NCORES); player_leg_estilo_tocou(PLR_LEG_COR); break;
     case 3: e->opacidade = voltaIndice(e->opacidade,dir,4); break;
     case 4: e->fundo   = voltaIndice(e->fundo,dir,5); break;
@@ -380,7 +362,7 @@ static void ajustarEstilo(int linha, int dir) {
     case 8: return;
     default:
       *e = (VideoLegendaEstilo){ 100, 0, 0, 5, 2, 0, 0, 0 };
-      // Restaurar e voltar ao normal do app, e o normal e respeitar o arquivo.
+      // Restaurar o estilo padrao do app.
       player_leg_estilo_tocou(PLR_LEG_NADA);
       break;
   }
@@ -864,7 +846,7 @@ static void linhaPainel(float x, float y, float w, const char *rot,
 
 static void linhaEstilo(float x, float y, float w, int i, int focado, float a) {
   char valor[64];
-  int apagado = estiloPreservadoAss(i);
+  int apagado = 0;
   valorEstilo(i,valor,sizeof valor);
   if (i == 8 || i == FX_N_ESTILO-1) {
     linhaPainel(x,y,w,i18n(EST_ROT[i]),valor,focado,0,apagado,a);

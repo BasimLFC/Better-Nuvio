@@ -1,6 +1,8 @@
 #ifndef NV_VIDEO_MAC_H
 #define NV_VIDEO_MAC_H
 
+#include "video.h"
+
 // Backend de desenvolvimento. So a build Mac com NV_MAC_VIDEO o vincula.
 int mac_video_iniciar(void);
 int mac_video_tocar(const char *url, const char *cabecalhos);
@@ -22,5 +24,10 @@ int mac_video_falhou(void);
 int mac_video_terminou(void);
 int mac_video_largura(void);
 int mac_video_altura(void);
+int mac_video_n_legenda(void);
+const VideoFaixa *mac_video_legenda(int i);
+int mac_video_legenda_atual(void);
+void mac_video_escolher_legenda(int i);
+int mac_video_legenda_nativa(char *dst, int tam);
 
 #endif

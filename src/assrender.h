@@ -28,9 +28,11 @@ int  assrender_adicionar_fonte(const char *nome, const void *dados, size_t taman
  * Mantem os bitmaps de contorno/sombra e os tempos de karaoke produzidos pelo
  * libass. enabled=0 preserva todas as cores do arquivo ASS. */
 void assrender_definir_cor(int enabled, int r, int g, int b);
-// Netflix Sans Regular/Medium e sombra projetada para falas ASS. Placas e
-// letreiros explicitamente posicionados preservam o desenho do arquivo.
-void assrender_definir_estilo(int negrito, int sombra);
+// Aplica as preferencias do player as falas ASS, usando a mesma tipografia,
+// cor, fundo e posicao das legendas SRT. Placas e efeitos permanecem no estilo
+// do arquivo. corRgb usa 0xRRGGBB; fundo vai de 0 a 4.
+void assrender_definir_estilo(int negrito, int sombra, int corRgb,
+                              int fundo, int posicao);
 
 /* Area em que o video aparece na tela (x,y,w,h, podendo passar da tela nos
  * modos de zoom), dimensoes do quadro decodificado e escala das fontes do

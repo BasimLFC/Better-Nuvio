@@ -6,6 +6,7 @@
 #include "gfx.h"
 #include <SDL2/SDL.h>
 #include <libavcodec/avcodec.h>
+#include <libavcodec/codec_desc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libswresample/swresample.h>
@@ -39,6 +40,76 @@ static unsigned char *upload;
 static size_t uploadTam;
 static SDL_AudioDeviceID audioDev;
 static atomic_int volumePct = 100;
+static VideoFaixa legFaixas[NV_FAIXA_MAX];
+static int legStreams[NV_FAIXA_MAX], nLeg, legAtual = -1;
+static atomic_int legStreamSelecionado = -1;
+typedef struct { double inicio, fim; char texto[768]; } LegCueMac;
+static LegCueMac legCues[32];
+static int legNCues;
+
+static void listarLegendas(const AVFormatContext *fmt) {
+  VideoFaixa faixas[NV_FAIXA_MAX] = {{0}};
+  int streams[NV_FAIXA_MAX], n = 0;
+  for (unsigned i = 0; i < fmt->nb_streams && n < NV_FAIXA_MAX; i++) {
+    const AVStream *s = fmt->streams[i];
+    const AVCodecDescriptor *d;
+    AVDictionaryEntry *lang;
+    if (s->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) continue;
+    d = avcodec_descriptor_get(s->codecpar->codec_id);
+    if (!d || !(d->props & AV_CODEC_PROP_TEXT_SUB)) continue;
+    lang = av_dict_get(s->metadata, "language", NULL, 0);
+    snprintf(faixas[n].idioma, sizeof faixas[n].idioma, "%s",
+             lang && lang->value ? lang->value : "und");
+    snprintf(faixas[n].rotulo, sizeof faixas[n].rotulo,
+             "Legenda %d · %.8s", n + 1, faixas[n].idioma);
+    faixas[n].numero = (int)i;
+    faixas[n].ordinalMkv = -1;
+    streams[n++] = (int)i;
+  }
+  pthread_mutex_lock(&mu);
+  memcpy(legFaixas, faixas, (size_t)n * sizeof faixas[0]);
+  memcpy(legStreams, streams, (size_t)n * sizeof streams[0]);
+  nLeg = n;
+  pthread_mutex_unlock(&mu);
+}
+
+static const char *textoAss(const char *s) {
+  int virgulas = 0;
+  if (strncmp(s, "Dialogue:", 9)) return s;
+  for (; *s; s++) if (*s == ',' && ++virgulas == 9) return s + 1;
+  return s;
+}
+
+static void publicarLegenda(const AVSubtitle *sub, const AVPacket *pkt,
+                            const AVStream *stream, int indice) {
+  LegCueMac cue = {0};
+  int64_t ts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+  double inicio = sub->pts != AV_NOPTS_VALUE
+                ? sub->pts / (double)AV_TIME_BASE
+                : ts != AV_NOPTS_VALUE ? ts * av_q2d(stream->time_base) : -1.0;
+  if (inicio < 0) return;
+  if (stream->start_time != AV_NOPTS_VALUE)
+    inicio -= stream->start_time * av_q2d(stream->time_base);
+  cue.inicio = inicio + sub->start_display_time / 1000.0;
+  cue.fim = inicio + sub->end_display_time / 1000.0;
+  if (cue.fim <= cue.inicio) cue.fim = cue.inicio + 3.0;
+  for (unsigned i = 0; i < sub->num_rects; i++) {
+    const AVSubtitleRect *r = sub->rects[i];
+    const char *parte = r->text ? r->text : r->ass ? textoAss(r->ass) : NULL;
+    size_t usado = strlen(cue.texto);
+    if (!parte || !*parte || usado + 2 >= sizeof cue.texto) continue;
+    if (usado) cue.texto[usado++] = '\n';
+    snprintf(cue.texto + usado, sizeof cue.texto - usado, "%s", parte);
+  }
+  if (!cue.texto[0] || atomic_load(&legStreamSelecionado) != indice) return;
+  pthread_mutex_lock(&mu);
+  if (legNCues == (int)(sizeof legCues / sizeof legCues[0])) {
+    memmove(legCues, legCues + 1, (size_t)(legNCues - 1) * sizeof legCues[0]);
+    legNCues--;
+  }
+  legCues[legNCues++] = cue;
+  pthread_mutex_unlock(&mu);
+}
 
 static double relogio(void) {
   double t = baseSeg;
@@ -170,13 +241,13 @@ static void enviarAudio(const AVFrame *f, SwrContext *swr) {
 static void *decodificar(void *u) {
   (void)u;
   AVFormatContext *fmt = avformat_alloc_context();
-  AVCodecContext *vc = NULL, *ac = NULL;
+  AVCodecContext *vc = NULL, *ac = NULL, *sc = NULL;
   AVFrame *frame = NULL;
   AVPacket *pkt = NULL;
   struct SwsContext *sws = NULL;
   SwrContext *swr = NULL;
   unsigned char *rgba = NULL;
-  int vi = -1, ai = -1, ow = 0, oh = 0, rc;
+  int vi = -1, ai = -1, si = -1, ow = 0, oh = 0, rc;
   double descartarAntes = 0.0;
   AVDictionary *opcoes = NULL;
   if (!fmt) { erro("alocar", AVERROR(ENOMEM)); goto fim; }
@@ -188,6 +259,7 @@ static void *decodificar(void *u) {
   if (rc < 0) { erro("abrir fonte", rc); goto fim; }
   rc = avformat_find_stream_info(fmt, NULL);
   if (rc < 0) { erro("ler faixas", rc); goto fim; }
+  listarLegendas(fmt);
   vi = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
   if (vi < 0 || !(vc = abrirCodec(fmt->streams[vi]))) {
     erro("video indisponivel", vi < 0 ? vi : AVERROR_DECODER_NOT_FOUND);
@@ -246,8 +318,12 @@ static void *decodificar(void *u) {
       if (av_seek_frame(fmt, vi, ts, AVSEEK_FLAG_BACKWARD) >= 0) {
         avcodec_flush_buffers(vc);
         if (ac) avcodec_flush_buffers(ac);
+        if (sc) avcodec_flush_buffers(sc);
         if (audioDev) SDL_ClearQueuedAudio(audioDev);
         descartarAntes = alvo - 0.03;
+        pthread_mutex_lock(&mu);
+        legNCues = 0;
+        pthread_mutex_unlock(&mu);
       }
       continue;
     }
@@ -265,6 +341,22 @@ static void *decodificar(void *u) {
         pthread_mutex_unlock(&mu);
       }
       break;
+    }
+    { int escolhido = atomic_load(&legStreamSelecionado);
+      if (escolhido != si) {
+        avcodec_free_context(&sc);
+        si = escolhido;
+        if (si >= 0 && si < (int)fmt->nb_streams) sc = abrirCodec(fmt->streams[si]);
+      }
+    }
+    if (pkt->stream_index == si && sc) {
+      AVSubtitle sub = {0};
+      int recebeu = 0;
+      if (avcodec_decode_subtitle2(sc, &sub, &recebeu, pkt) >= 0 && recebeu)
+        publicarLegenda(&sub, pkt, fmt->streams[si], si);
+      avsubtitle_free(&sub);
+      av_packet_unref(pkt);
+      continue;
     }
     AVCodecContext *ctx = pkt->stream_index == vi ? vc :
                           pkt->stream_index == ai ? ac : NULL;
@@ -295,6 +387,7 @@ fim:
   av_packet_free(&pkt);
   avcodec_free_context(&vc);
   avcodec_free_context(&ac);
+  avcodec_free_context(&sc);
   avformat_close_input(&fmt);
   return NULL;
 }
@@ -315,6 +408,8 @@ void mac_video_parar(void) {
   duracao = baseSeg = 0;
   quadroSeq = quadroEnviado = 0;
   seekPendente = 0;
+  nLeg = legNCues = 0; legAtual = -1;
+  atomic_store(&legStreamSelecionado, -1);
   free(quadro); quadro = NULL;
   pthread_mutex_unlock(&mu);
   if (textura && SDL_GL_GetCurrentContext()) {
@@ -359,6 +454,56 @@ void mac_video_volume(int pct) {
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   atomic_store(&volumePct, pct);
+}
+
+int mac_video_n_legenda(void) {
+  pthread_mutex_lock(&mu);
+  int n = nLeg;
+  pthread_mutex_unlock(&mu);
+  return n;
+}
+
+const VideoFaixa *mac_video_legenda(int i) {
+  pthread_mutex_lock(&mu);
+  const VideoFaixa *f = i >= 0 && i < nLeg ? &legFaixas[i] : NULL;
+  pthread_mutex_unlock(&mu);
+  return f;
+}
+
+int mac_video_legenda_atual(void) {
+  pthread_mutex_lock(&mu);
+  int i = legAtual;
+  pthread_mutex_unlock(&mu);
+  return i;
+}
+
+void mac_video_escolher_legenda(int i) {
+  pthread_mutex_lock(&mu);
+  if (i < 0 || i >= nLeg) i = -1;
+  legAtual = i;
+  legNCues = 0;
+  atomic_store(&legStreamSelecionado, i < 0 ? -1 : legStreams[i]);
+  pthread_mutex_unlock(&mu);
+}
+
+int mac_video_legenda_nativa(char *dst, int tam) {
+  size_t n = 0;
+  if (!dst || tam < 2) return 0;
+  dst[0] = 0;
+  pthread_mutex_lock(&mu);
+  if (legAtual >= 0 && ativo) {
+    double agora = relogio();
+    for (int i = 0; i < legNCues; i++) {
+      const LegCueMac *c = &legCues[i];
+      if (agora < c->inicio || agora >= c->fim) continue;
+      if (n && n + 1 < (size_t)tam) dst[n++] = '\n';
+      if (n + 1 >= (size_t)tam) break;
+      snprintf(dst + n, (size_t)tam - n, "%s", c->texto);
+      n = strlen(dst);
+    }
+  }
+  pthread_mutex_unlock(&mu);
+  return n > 0;
 }
 void mac_video_buscar(double s) {
   pthread_mutex_lock(&mu);

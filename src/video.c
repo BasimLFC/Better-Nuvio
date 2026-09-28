@@ -282,17 +282,47 @@ int  video_terminou(void) {
 }
 unsigned video_bufferando_ms(void) { return 0; }
 int  video_n_audio(void) { return 0; }
-int  video_n_legenda(void) { return 0; }
+int  video_n_legenda(void) {
+#ifdef NV_MAC_VIDEO
+  return mac_video_n_legenda();
+#else
+  return 0;
+#endif
+}
 const VideoFaixa *video_audio(int i) { (void)i; return 0; }
-const VideoFaixa *video_legenda(int i) { (void)i; return 0; }
+const VideoFaixa *video_legenda(int i) {
+#ifdef NV_MAC_VIDEO
+  return mac_video_legenda(i);
+#else
+  (void)i; return 0;
+#endif
+}
 int video_legenda_ordinal_mkv(int i) { (void)i; return -1; }
 int  video_mkv_sondado(void) { return 2; }
 void video_sondar_mkv_agora(void) {}
 int  video_audio_atual(void) { return 0; }
-int  video_legenda_atual(void) { return -1; }
+int  video_legenda_atual(void) {
+#ifdef NV_MAC_VIDEO
+  return mac_video_legenda_atual();
+#else
+  return -1;
+#endif
+}
 void video_escolher_audio(int i) { (void)i; }
-void video_escolher_legenda(int i) { (void)i; }
-int  video_legenda_nativa(char *d, int t) { (void)t; if (d) d[0] = 0; return 0; }
+void video_escolher_legenda(int i) {
+#ifdef NV_MAC_VIDEO
+  mac_video_escolher_legenda(i);
+#else
+  (void)i;
+#endif
+}
+int  video_legenda_nativa(char *d, int t) {
+#ifdef NV_MAC_VIDEO
+  return mac_video_legenda_nativa(d, t);
+#else
+  (void)t; if (d) d[0] = 0; return 0;
+#endif
+}
 void video_legenda_externa(const char *u) { (void)u; }
 void video_legenda_estilo(const VideoLegendaEstilo *e) { (void)e; }
 void video_definir_mp4(int m) { (void)m; }
