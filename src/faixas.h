@@ -18,5 +18,7 @@ int  faixas_aberta(void);
 void faixas_evento(const SDL_Event *e);
 void faixas_atualizar(float dt, Uint32 agora);
 void faixas_desenhar(Uint32 agora);
+// Enquanto a extracao embutida aquece, o pipeline nativo continua visivel.
+int faixas_legenda_embutida_na_tv(void);
 
 #endif

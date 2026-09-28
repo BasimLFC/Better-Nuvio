@@ -997,7 +997,7 @@ int main(int argc, char **argv) {
       ok(conferirCues(esp, nEsp) == nEsp, "todos os cues batem"); }
     esperarFio();
 
-    printf("\n[12e] sem faixa ASS a colher: a pre-busca nao atrasa o video\n");
+    printf("\n[12e] SRT embutido e idioma ausente: a pre-busca nao atrasa o video\n");
     { char urlS[600]; long t0;
       snprintf(urlS, sizeof urlS, "%s/%s", base, argv[4]);
       mkvass_parar(); esperarFio(); legenda_desligar();
@@ -1007,10 +1007,11 @@ int main(int argc, char **argv) {
       ms = esperarPrebusca();
       esperarFio();
       printf("    SRT: video solto em %ld ms, %ld GET(s), estado %d\n", ms, contagemServidor(), mkvass_estado());
-      // O cabecalho da pre-busca e de 64 KB: num host que ja cortou (teto de
-      // 32 KB, aprendido no [12c]) ele sai em dois pedacos. Nada alem dele.
-      ok(ms < 1000 && contagemServidor() <= 2, "faixa SRT: so o cabecalho e o video sai");
-      ok(mkvass_estado() == MKVASS_OCIOSO, "sem no-go para ninguem: volta a ocioso");
+      // S_TEXT/UTF8 agora participa da extracao embutida. O video ainda sai
+      // sem esperar a faixa inteira, que segue preparada para adocao.
+      ok(ms < 1000 && contagemServidor() > 2, "faixa SRT: video sai enquanto a faixa e preparada");
+      ok(mkvass_estado() == MKVASS_COLHENDO || mkvass_estado() == MKVASS_COMPLETO,
+         "faixa SRT segue disponivel para o overlay");
       snprintf(urlS, sizeof urlS, "%s/%s", base, argv[2]);
       zerarServidor();
       t0 = agoraMs();

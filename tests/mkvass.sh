@@ -119,7 +119,17 @@ fi
 if [ "${NUVIO_MKVASS_ONLY_TEXT:-0}" = "1" ]; then exit 0; fi
 if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists libass; then
   cc tests/ass_tempos.c -o /tmp/nuvio-ass-tempos-test $(pkg-config --cflags --libs libass)
-  SC=$(grep -l "^; mkvass-estado: completo" "$DIR"/dados/mkvass-*-3.ass 2>/dev/null | head -1)
+  # A suíte gera sidecars de vários arquivos/faixas. O primeiro nome no glob
+  # pode ser o fixture de 10 falas, não a referência de 41 falas abaixo.
+  SC=""
+  REF_EVENTOS=$(grep -c '^Dialogue:' "$DIR/ref.ass")
+  for candidato in "$DIR"/dados/mkvass-*-3.ass; do
+    [ -f "$candidato" ] || continue
+    grep -q '^; mkvass-estado: completo' "$candidato" || continue
+    [ "$(grep -c '^Dialogue:' "$candidato")" -eq "$REF_EVENTOS" ] || continue
+    SC="$candidato"
+    break
+  done
   [ -n "$SC" ] || { echo "mkvass.sh: nenhum sidecar completo para conferir no libass"; exit 1; }
   /tmp/nuvio-ass-tempos-test "$DIR/ref.ass" "$SC"
 fi

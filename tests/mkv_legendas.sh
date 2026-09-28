@@ -54,6 +54,10 @@ PY
   -metadata:s:s:0 language=eng -metadata:s:s:1 language=por -metadata:s:s:2 language=spa \
   "$DIR/multi.mkv"
 
+# O muxer live omite Cues. Exercita a cobertura da varredura antes de desligar
+# a legenda nativa, sem depender de mkvmerge instalado no Mac.
+"$FFMPEG" -v error -y -i "$DIR/multi.mkv" -map 0 -c copy -live 1 "$DIR/no-cues.mkv"
+
 python3 tests/servidor_range.py "$DIR" > "$DIR/porta.txt" &
 SRV=$!
 for _ in $(seq 1 50); do grep -q porta "$DIR/porta.txt" 2>/dev/null && break; sleep 0.1; done
@@ -64,4 +68,5 @@ cc -Isrc tests/mkv_legendas.c src/mkv.c src/mkvass.c src/assrender.c src/legenda
   src/rede.c src/redeurl.c src/dados.c -o /tmp/nuvio-mkv-legendas-tests -O1 -g -Wall \
   -I/opt/homebrew/include -Wno-deprecated-declarations
 mkdir -p "$DIR/dados"
-NUVIO_DADOS="$DIR/dados" /tmp/nuvio-mkv-legendas-tests "http://127.0.0.1:$PORTA/multi.mkv"
+NUVIO_DADOS="$DIR/dados" /tmp/nuvio-mkv-legendas-tests \
+  "http://127.0.0.1:$PORTA/multi.mkv" "http://127.0.0.1:$PORTA/no-cues.mkv"

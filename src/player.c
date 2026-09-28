@@ -2431,6 +2431,9 @@ static double escalaFonteAss(void) {
 }
 
 static void desenharLegendaExterna(void){
+  // A faixa embutida so aparece pelo overlay quando a janela extraida cobre
+  // a cena. Durante leitura/seek a TV ainda a desenha, sem duplicar linhas.
+  if (faixas_legenda_embutida_na_tv()) return;
   /* ASS completo: libass preserva a composicao de placas e efeitos, mas as
    * falas recebem o mesmo estilo do overlay SRT. */
   int r, g, b;

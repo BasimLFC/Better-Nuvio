@@ -243,6 +243,8 @@ typedef struct {
                            // ele passa da janela, o fio dorme SEM tocar a rede.
 } Ponto;
 
+typedef struct { double tempo; unsigned char colhido; } PontoPublicado;
+
 // Varredura sem Cues nenhum: trecho ja lido, em bytes e em tempo de midia.
 typedef struct { long b0, b1; double t0, t1; } Cob;
 // Janela de bytes da varredura: [ini, ini+n) do arquivo, num buffer so.
@@ -273,6 +275,10 @@ static struct {
   int      parar;
   long     pedidos, bytes;
   int      nPontos, nColhidos;
+  PontoPublicado *publicados; // snapshot do ultimo corpo entregue ao overlay
+  int      nPublicados;
+  Cob      cobPublicada[MKVASS_COB];
+  int      nCobPublicada, varreInteira;
   int      varredura;      // 0 pelo indice; 1 varrendo Clusters (ver MKVASS_VARRE_CH)
   double   folga;          // buffer de video a frente (s); < 0 = desconhecido
   unsigned fontesLegG;     // geracao da legenda em que as fontes do MKV entraram (0 = nenhuma)
@@ -298,8 +304,10 @@ static struct {
   unsigned char *cab;
   long     cabN;
   char     cabUrl[4096];
-} S = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, "", 0, 0,
-        MKVASS_OCIOSO, 0.0, 0, 0, 0, 0, 0, 0, 0, -1.0, 0, "", 0, 0, 0, 0 };
+} S = { .trava = PTHREAD_MUTEX_INITIALIZER,
+        .sinal = PTHREAD_COND_INITIALIZER,
+        .estado = MKVASS_OCIOSO, .folga = -1.0,
+        .prebuscaOrdinal = -1 };
 
 // Tudo abaixo e DO FIO: so o fio de colheita toca, sem trava.
 typedef struct {
@@ -2002,6 +2010,7 @@ static void rangeDoGrupo(const Fio *f, int i, int j, long *ini, long *n) {
 // --- varredura: ler os Clusters quando o indice nao aponta os blocos ---------
 
 static void entregar(Fio *f);
+static void publicarCoberturaSeAtual(Fio *f);
 
 // Janela de bytes da varredura: [ini, ini+n) do arquivo, num buffer so.
 // `eof`: o servidor devolveu menos do que o pedido sem fim conhecido — nao ha
@@ -2109,14 +2118,28 @@ static long ressincronizar(Fio *f, long byte, double *ts) {
     p = range(f, byte, len, &n);
     if (!p) return -1;
     for (k = 0; k + 16 <= n; k++) {
-      int ut = 0, ti = 0, tt = 0; long tam, tn; unsigned long v;
+      int ut = 0; long tam; unsigned long v;
       if (p[k] != 0x1F || p[k + 1] != 0x43 || p[k + 2] != 0xB6 || p[k + 3] != 0x75) continue;
       tam = lerTam(p + k + 4, n - k - 4, &ut);
       if (tam == -1 || (tam > 0 && f->segFim > 0 && byte + k + 4 + ut + tam > f->segFim + 1)) continue;
-      if (lerId(p + k + 4 + ut, n - k - 4 - ut, &ti) != ID_TIMESTAMP) continue;
-      tn = lerTam(p + k + 4 + ut + ti, n - k - 4 - ut - ti, &tt);
-      if (tn < 1 || tn > 8 || k + 4 + ut + ti + tt + tn > n) continue;
-      v = lerUint(p + k + 4 + ut + ti + tt, tn);
+      // O Timestamp pode vir depois de CRC32 e Void. Isso e comum no muxer
+      // Matroska live e, sem aceitar esses filhos, o seek nunca acha Cluster.
+      { long posFilho = k + 4 + ut; int achou = 0;
+        for (int extra = 0; extra < 8 && posFilho + 4 < n && posFilho - k < 256; extra++) {
+          int ti = 0, tt = 0; unsigned long id;
+          long tn;
+          id = lerId(p + posFilho, n - posFilho, &ti);
+          if (!id) break;
+          tn = lerTam(p + posFilho + ti, n - posFilho - ti, &tt);
+          if (tn < 0 || posFilho + ti + tt + tn > n) break;
+          if (id == ID_TIMESTAMP && tn >= 1 && tn <= 8) {
+            v = lerUint(p + posFilho + ti + tt, tn); achou = 1; break;
+          }
+          if (id != 0xBFUL && id != 0xECUL) break;
+          posFilho += ti + tt + tn;
+        }
+        if (!achou) continue;
+      }
       *ts = segundosDe(f, v);
       free(p);
       return byte + k;
@@ -2267,7 +2290,21 @@ static int varrerTrecho(Fio *f, int i, double tLim) {
       cab = cui + cut; cfim = o + cab + ctam;
       if (cid == ID_TIMESTAMP && ctam > 0 && ctam <= 8) {
         g = garantir(f, wp, o, cab + ctam, lim, &p, &disp);
-        if (g == 1) { cl.ts = lerUint(p + cab, ctam); cl.temTs = 1; }
+        if (g == 1) {
+          double ts;
+          cl.ts = lerUint(p + cab, ctam); cl.temTs = 1;
+          // CRC32/Void podem preceder Timestamp (ffmpeg -live). O probe do
+          // primeiro filho nao o ve; ainda precisamos respeitar a janela.
+          ts = segundosDe(f, cl.ts);
+          if (f->varreInteira && tsIni < 0.0) {
+            if (tLim > 0.0 && ts > tLim) {
+              f->pontos[i].cursor = cl.pos; f->pontos[i].cursorTs = ts;
+              goto sair;
+            }
+            f->varreTs = ts;
+            tsIni = tsFim = ts;
+          }
+        }
         else if (g != 2) { r = g; goto sair; }
       } else if ((cid == ID_SIMPLEBLOCK || cid == ID_BLOCKGROUP) && ctam > 0) {
         // So o cabecalho do bloco decide se e da faixa; o payload de video
@@ -2289,6 +2326,15 @@ static int varrerTrecho(Fio *f, int i, double tLim) {
     }
     // Cluster inteiro lido: o cursor avanca (o ponto retoma daqui se parar).
     f->pontos[i].cursor = o; f->pontos[i].cursorTs = -1.0;
+    if (f->varreInteira && tsIni >= 0.0) {
+      // Um arquivo sem Cues pode ter horas de duracao. Publicar a cobertura
+      // por Cluster permite ao overlay assumir a cena ja varrida, sem esperar
+      // o fim do arquivo nem esconder falas que ainda estao na rede.
+      cobAdicionar(f, ini, o, tsIni, tsFim);
+      ini = o; tsIni = tsFim = -1.0;
+      if (f->sujo) entregar(f);
+      publicarCoberturaSeAtual(f);
+    }
     if (!f->varreEncadeia) break;
   }
   // Fim do trecho. No modo sem Cues so conta como terminado se a cobertura
@@ -2469,6 +2515,7 @@ static int varrerLaco(Fio *f) {
     }
     if (f->sujo && (!f->primeiraFala || ocioso || agoraMs() - f->ultEntrega >= MKVASS_ENTREGA_MS))
       entregar(f);
+    publicarCoberturaSeAtual(f);
     if (agoraMs() - ultLog >= 60000L) {
       long bytes;
       pthread_mutex_lock(&S.trava); bytes = S.bytes; pthread_mutex_unlock(&S.trava);
@@ -2606,7 +2653,42 @@ static int entregarCorpoSeAtual(Fio *f, const char *corpo) {
     }
   }
   pthread_mutex_unlock(&S.trava);
+  if (ok && f->nPontos > 0) {
+    // Copiar APOS a publicacao do corpo: o leitor nao pode desligar a TV por
+    // blocos baixados mas ainda nao visiveis no parser/libass.
+    pthread_mutex_lock(&S.trava);
+    if (f->g == S.geracao && !S.parar) {
+      PontoPublicado *v = S.nPublicados == f->nPontos ? S.publicados
+          : realloc(S.publicados, (size_t)f->nPontos * sizeof *v);
+      if (v) {
+        S.publicados = v;
+        for (int i = 0; i < f->nPontos; i++) {
+          v[i].tempo = segundosDe(f, f->pontos[i].tempo);
+          v[i].colhido = f->pontos[i].colhido;
+        }
+        S.nPublicados = f->nPontos;
+      }
+      S.varreInteira = f->varreInteira;
+      S.nCobPublicada = f->nCob;
+      memcpy(S.cobPublicada, f->cob, (size_t)f->nCob * sizeof f->cob[0]);
+    }
+    pthread_mutex_unlock(&S.trava);
+  }
   return ok;
+}
+
+// No arquivo sem Cues, uma janela pode ser varrida sem conter nenhuma fala
+// nova. Atualiza a cobertura mesmo nesse caso, mas so depois de publicar o
+// corpo anterior: a TV nunca some por dados que ainda nao estao no overlay.
+static void publicarCoberturaSeAtual(Fio *f) {
+  if (!f->varreInteira || f->sujo || f->entregas <= 0) return;
+  pthread_mutex_lock(&S.trava);
+  if (f->g == S.geracao && !S.parar) {
+    S.varreInteira = 1;
+    S.nCobPublicada = f->nCob;
+    memcpy(S.cobPublicada, f->cob, (size_t)f->nCob * sizeof f->cob[0]);
+  }
+  pthread_mutex_unlock(&S.trava);
 }
 
 static int contarEventos(const Fio *f) {
@@ -3103,6 +3185,8 @@ static int iniciarFio(const char *url, int numeroFaixa, int herdar, int segurar,
   S.parar = 0;
   S.pedidos = S.bytes = 0;
   S.nPontos = S.nColhidos = 0; S.varredura = 0; S.folga = -1.0;
+  free(S.publicados); S.publicados = NULL; S.nPublicados = 0;
+  S.nCobPublicada = S.varreInteira = 0;
   S.prebusca = escolher != NULL; S.prebuscaFase = escolher ? 1 : 0;
   S.prebuscaOrdinal = -1; S.adotar = 0;
   if (escolher) S.pos = 0.0;
@@ -3220,6 +3304,39 @@ void mkvass_passo(double posSeg) {
   pthread_mutex_unlock(&S.trava);
 }
 
+int mkvass_janela_pronta(double posSeg, double adianteSeg) {
+  int pronto = 0;
+  double inicio = posSeg - MKVASS_ATRAS_SEG;
+  double fim = posSeg + (adianteSeg > 0 ? adianteSeg : 0);
+  pthread_mutex_lock(&S.trava);
+  if (S.estado == MKVASS_COMPLETO) pronto = 1;
+  else if (S.estado == MKVASS_COLHENDO && S.varreInteira) {
+    double de = inicio > 0.0 ? inicio : 0.0;
+    for (int i = 0; i < S.nCobPublicada; i++) {
+      const Cob *c = &S.cobPublicada[i];
+      if (c->t0 <= de && c->t1 >= fim) { pronto = 1; break; }
+    }
+  }
+  else if (S.estado == MKVASS_COLHENDO && S.nPublicados > 0) {
+    pronto = 1;
+    for (int i = 0; i < S.nPublicados; i++) {
+      const PontoPublicado *p = &S.publicados[i];
+      if (p->tempo >= inicio && p->tempo <= fim && p->colhido != 1) {
+        pronto = 0;
+        break;
+      }
+    }
+  }
+  pthread_mutex_unlock(&S.trava);
+  if (pronto) {
+    LegendaCue cue;
+    int total = 0;
+    legenda_falas(posSeg, 0, &cue, 1, NULL, NULL, &total);
+    pronto = total > 0;
+  }
+  return pronto;
+}
+
 void mkvass_folga(double segundosAFrente) {
   pthread_mutex_lock(&S.trava);
   // Acorda o fio so quando cruza o limiar da pausa, nos dois sentidos.
@@ -3237,6 +3354,8 @@ void mkvass_parar(void) {
   if (S.prebuscaFase == 1) S.prebuscaFase = 2;
   if (S.estado != MKVASS_COMPLETO && S.estado < MKVASS_NOGO) S.estado = MKVASS_OCIOSO;
   S.pos = 0.0;
+  free(S.publicados); S.publicados = NULL; S.nPublicados = 0;
+  S.nCobPublicada = S.varreInteira = 0;
   pthread_cond_broadcast(&S.sinal);
   pthread_mutex_unlock(&S.trava);
 }

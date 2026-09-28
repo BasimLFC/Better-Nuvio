@@ -69,10 +69,10 @@ static int legExterna = -1;
 
 // LEGENDA EMBUTIDA DE TEXTO PELO OVERLAY (#92). `legOverlay` e o indice da
 // faixa embutida cujo texto o mkvass.c esta colhendo do MKV por Range para o
-// overlay do app desenhar — o pipeline da TV fica com a legenda DESLIGADA
-// (video_escolher_legenda(-1)), entao video_legenda_atual() diz -1 e, sem
-// esta variavel, a folha marcaria "Nenhuma" como ativa. Mesmo motivo do
-// legExterna acima.
+// overlay do app desenhar. A TV continua desenhando ate o trecho atual estar
+// publicado; so entao o app desliga o renderer nativo. Nesse estado,
+// video_legenda_atual() diz -1 e a folha precisa de legOverlay para marcar a
+// faixa certa como ativa. Mesmo motivo do legExterna acima.
 //
 // `legOverlayNoGo` e a faixa em que o mkvass DESISTIU (arquivo sem indice da
 // legenda, servidor sem Range): a folha voltou a entregar a faixa ao pipeline
@@ -116,6 +116,7 @@ static Uint32 legAutoDesde;
 // e a faixa ficava na TV — que corta metade das falas — ate o fim do episodio.
 static int legOverlayFalhas, legOverlayRecusas, legOverlayNoGoEstado;
 static int legOverlayTV, legOverlayColhidos;
+int faixas_legenda_embutida_na_tv(void) { return legOverlay >= 0 && legOverlayTV; }
 static Uint32 legOverlayRetomar;       // 0 = nada agendado
 
 static int ehAss(const VideoFaixa *f) {
@@ -128,20 +129,18 @@ static int ehTextoSimples(const VideoFaixa *f) {
 
 static int ehOverlay(const VideoFaixa *f) { return ehAss(f) || ehTextoSimples(f); }
 
-// O overlay do app assume a faixa embutida `i` (ordinal `ord` no arquivo): a
-// legenda nativa da TV e DESLIGADA (video_escolher_legenda(-1) manda
-// setSubtitleEnable false ao uMS / desliga no AVPlay) e o mkvass comeca a
-// colher. A linha de log e a prova de que o app assumiu — se a TV continuar
-// desenhando por cima, o firmware ignorou o setSubtitleEnable, e isso e
-// outro bug (a resposta do uMS sai logo abaixo como "[video] {...}").
+// Comeca a colher a faixa embutida `i` (ordinal `ord` no arquivo). A TV
+// continua desenhando ate o overlay ter o trecho atual pronto.
 static void overlayAssumir(int i, int ord) {
   const VideoFaixa *f = video_legenda(i);
-  video_escolher_legenda(-1);
+  // O Enhanced so esconde o renderer nativo DEPOIS de ter cues utilizaveis.
+  // Range pode levar segundos no CDN: manter a faixa selecionada nesse tempo.
+  if (video_legenda_atual() != i) video_escolher_legenda(i);
   mkvass_iniciar_ordinal(video_url_atual(), ord);
   legOverlay = i;
   legOverlayFalhas = legOverlayRecusas = 0; legOverlayRetomar = 0;
-  legOverlayTV = legOverlayColhidos = 0;
-  printf("[legenda] faixa %d (%s, %s) -> app: ordinal %d; legenda nativa desligada\n",
+  legOverlayTV = 1; legOverlayColhidos = 0;
+  printf("[legenda] faixa %d (%s, %s) -> app: ordinal %d; TV ate a janela ficar pronta\n",
          i, f ? f->rotulo : "?", f ? f->codec : "?", ord);
   fflush(stdout);
 }
@@ -755,23 +754,33 @@ void faixas_atualizar(float dt, Uint32 agora) {
     // sidecar parcial nao volta por cima da legenda da TV.
     if (legOverlayTV) mkvass_retomar_segurando(); else mkvass_retomar();
   }
-  // PROGRESSO: chegou fala nova desde a ultima falha (ou a faixa fechou).
-  // Zera a contagem, e se a TV estava desenhando por enquanto, a faixa VOLTA
-  // ao overlay: nativa desligada, o app desenha o que acabou de entregar.
-  if (legOverlay >= 0 && !legOverlayRetomar && !mkvass_nogo() &&
-      (legOverlayFalhas || legOverlayTV)) {
+  // O Enhanced troca de renderer depois de instalar a janela extraida.
+  // Verificamos a mesma janela no tempo de ARQUIVO usado pelo desenho (inclui
+  // o ajuste de sincronizacao), para que o seek nao mostre falas atrasadas.
+  if (legOverlay >= 0) {
     int col = 0, e = mkvass_estado();
+    double posArquivo = player_leg_tempo_arquivo(player_posicao_legenda_seg());
+    // Entrar exige folga para a rede. Depois de entrar, uma janela menor
+    // evita piscar entre TV e app na fronteira do proximo bloco.
+    int pronta = mkvass_janela_pronta(posArquivo, legOverlayTV ? 12.0 : 2.0);
     mkvass_estatisticas(NULL, NULL, &col, NULL);
-    if ((e == MKVASS_COMPLETO || (e == MKVASS_COLHENDO && col > legOverlayColhidos)) &&
-        legenda_ligada_em(legenda_geracao())) {
-      printf("[legenda] faixa %d: o mkvass voltou a entregar (%d blocos, depois de %d falha(s))%s\n",
-             legOverlay, col, legOverlayFalhas, legOverlayTV ? ": a faixa VOLTA ao app (nativa desligada)" : "");
+    if (!pronta && !legOverlayTV) {
+      // Seek para trecho ainda nao extraido: nenhuma fala deve chegar tarde.
+      legOverlayTV = 1;
+      video_escolher_legenda(legOverlay);
+      printf("[legenda] faixa %d: janela nao pronta em %.1fs; TV assume durante a leitura\n",
+             legOverlay, player_posicao_legenda_seg());
       fflush(stdout);
-      if (legOverlayTV) {
-        video_escolher_legenda(-1);
-        player_toast(i18n("Legenda: o app voltou a desenhar"), 4000);
-      }
-      legOverlayTV = 0; legOverlayFalhas = 0; legOverlayColhidos = col;
+    } else if (pronta && legOverlayTV) {
+      video_escolher_legenda(-1);
+      legOverlayTV = 0;
+      printf("[legenda] faixa %d: janela pronta em %.1fs (%d blocos); app assume\n",
+             legOverlay, player_posicao_legenda_seg(), col);
+      fflush(stdout);
+    }
+    if (pronta && (e == MKVASS_COMPLETO || col > legOverlayColhidos)) {
+      legOverlayFalhas = 0;
+      legOverlayColhidos = col;
     }
   }
   // O mkvass declarou no-go. Passageiro: agenda outra tentativa — sempre — e
@@ -806,7 +815,6 @@ void faixas_atualizar(float dt, Uint32 agora) {
         printf("[legenda] faixa %d: a TV desenha POR ENQUANTO (%d colhidos), o app segue tentando\n", i, col);
         fflush(stdout);
         player_toast(i18n("Legenda: a TV desenha por enquanto (falha de rede); o app tenta de novo"), 6000);
-        legenda_desligar();
         video_escolher_legenda(i);
       }
     } else {

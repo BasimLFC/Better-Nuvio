@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.23",
-  "body": "## Monstros nas coleções\n- Os cards de Dahmer, Irmãos Menendez, Ed Gein e Lizzie Borden agora abrem com a identidade da coleção e buscam temporadas, episódios e fontes pela série principal. Isso vale para coleções vindas do TMDB ou do Trakt; o app não fica aguardando uma segunda resolução do ID do TMDB para esses arcos.\n- O mesmo mapeamento é aplicado quando um título abre por outra grade, antes de carregar os dados do detalhe.\n## Continuar assistindo\n- O progresso de cada episódio é gravado sob a série principal e reaparece no card do arco que corresponde à temporada assistida. Registros antigos gravados com o ID do arco continuam reconhecidos.\n- Se o add-on de metadados não devolver a série principal, o app usa a arte e o título do arco já presentes no catálogo. Quando o catálogo termina de carregar depois do histórico, a fileira é refeita para incluir o título pendente. Se o arco só veio da coleção e o app foi reiniciado, uma capa da série principal serve de reserva até o card do arco voltar.\n- IDs do TMDB com dois-pontos permanecem completos ao ler e gravar progresso; só o sufixo numérico de temporada e episódio é separado.\n## Verificação\n- Passaram os testes de episódios dos quatro arcos, progresso local e antigo, ordenação e remoção do Continuar assistindo, coleções e compilação para Mac e LG webOS, inclusive o arranque sem o card do arco em memória. A lista de fontes ainda depende dos add-ons instalados e da disponibilidade de streams para o episódio.\n",
+  "tag_name": "v1.5.24",
+  "body": "## Legendas embutidas\n- As faixas de texto do MKV permanecem na legenda nativa da TV enquanto o app busca e prepara as falas. A troca para o visual Netflix Sans ocorre apenas depois que o trecho atual e os segundos seguintes já estão disponíveis no player. Isso evita tela sem legenda durante a leitura inicial.\n- Ao avançar ou voltar no vídeo, o app devolve temporariamente a faixa à TV se a nova posição ainda não foi extraída. Quando os cues dessa posição ficam prontos, o visual personalizado assume de novo, sem mostrar uma fala antiga como se fosse a atual.\n- A varredura de MKVs sem índice de legendas agora reconhece Clusters que trazem CRC ou Void antes do timestamp. O mesmo ajuste permite localizar esses Clusters após uma busca no vídeo.\n- ASS, SSA e SRT embutidos continuam usando o estilo Netflix Sans configurado no player. Legendas de imagem, como PGS, permanecem no renderizador nativo.\n## Verificação\n- Passaram os testes de extração em MKV com índice, MKV sem índice, seek com servidor Range lento, ASS/SRT e decodificação de legendas embutidas no Mac em MP4 e MKV. A suíte completa de MKV passou; o libass comparou 41 falas com diferença máxima de 0 ms. O aplicativo Mac e o IPK LG webOS foram compilados; a renderização final ainda precisa ser conferida em uma TV física.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.23_arm.ipk",
-      "size": 52076038,
-      "digest": "sha256:7f83cd9422a83602347e4a863003212e68826e42e151d41544f8b5f0006e738d",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.23_arm.ipk"
+      "name": "com.betternuvio.app_1.5.24_arm.ipk",
+      "size": 52076384,
+      "digest": "sha256:9d82fd1e9d673a8bfed762931101c2b7ceb45f67801707faad5e227b034f75b2",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.24_arm.ipk"
     }
   ]
 }

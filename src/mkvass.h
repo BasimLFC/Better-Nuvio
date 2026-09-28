@@ -73,6 +73,10 @@ void mkvass_iniciar_ordinal(const char *url, int ordinalFaixa);
 // Chamar UMA VEZ POR QUADRO com a posicao do player: e o que move a janela de
 // colheita. Barato — so compara e acorda o fio quando a posicao andou.
 void mkvass_passo(double posSeg);
+// A faixa do app so substitui a legenda nativa quando os blocos perto do
+// playhead ja foram publicados. Depois de um seek, volta a 0 ate a nova
+// janela estar pronta; evita silencio e falas que chegam atrasadas da rede.
+int mkvass_janela_pronta(double posSeg, double adianteSeg);
 // Quanto buffer de VIDEO ha a frente do playhead, em segundos; negativo =
 // desconhecido. So a VARREDURA usa: abaixo de 20 s ela pausa, para nao
 // disputar a conexao com o video. Chamar junto com mkvass_passo.
