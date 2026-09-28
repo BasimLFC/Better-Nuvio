@@ -27,6 +27,8 @@
 // resposta (rede_baixar devolve NULL em falha e em 4xx).
 static const char *resp[2];
 static int nDebridNovaBusca;
+static int pedidosExemplo, pedidosAntigo, fontesPublicadas;
+static char nomesPublicados[2][96];
 
 // canal.test imita o FrostView TV medido no #112: 200 {"streams":[]} para
 // /stream/tv/ e a lista de verdade para /stream/channel/. `pedidosCanal`
@@ -57,6 +59,8 @@ char *rede_baixar(const char *url, int s) {
     r = tv ? respCanalTv : respCanalChannel;
     return r ? strdup(r) : NULL;
   }
+  if (strstr(url, "exemplo.test")) pedidosExemplo++;
+  if (strstr(url, "antigo.test")) pedidosAntigo++;
   r = strstr(url, "exemplo.test") ? resp[0]
     : strstr(url, "antigo.test")  ? resp[1] : NULL;
   return r ? strdup(r) : NULL;
@@ -64,15 +68,21 @@ char *rede_baixar(const char *url, int s) {
 // conta um "url" por fonte; o bastante para distinguir lista vazia de cheia
 int stream_extrair(const char *json, const char *prov, Stream **saida) {
   int n = 0; const char *p = json;
-  (void)prov;
   while ((p = strstr(p, "\"url\"")) != NULL) { n++; p += 5; }
   *saida = n ? calloc((size_t)n, sizeof(Stream)) : NULL;
+  for (int i = 0; i < n; i++)
+    snprintf((*saida)[i].addonNome, sizeof (*saida)[i].addonNome, "%s", prov);
   if (n && strstr(json, "OBSOLETE CONFIGURATION"))
     snprintf((*saida)[0].descricao, sizeof (*saida)[0].descricao,
              "OBSOLETE CONFIGURATION");
   return n;
 }
-void stream_definir_lista(const Stream *l, int n) { (void)l; (void)n; }
+void stream_definir_lista(const Stream *l, int n) {
+  fontesPublicadas = n;
+  memset(nomesPublicados, 0, sizeof nomesPublicados);
+  for (int i = 0; l && i < n && i < 2; i++)
+    snprintf(nomesPublicados[i], sizeof nomesPublicados[i], "%s", l[i].addonNome);
+}
 void debrid_definir_episodio(int t, int e) { (void)t; (void)e; }
 void debrid_nova_busca(void) { nDebridNovaBusca++; }
 const char *i18n(const char *s) { return s; }
@@ -273,6 +283,46 @@ int main(void) {
       if (l && !strcmp(l->provedor, "Addon 17")) viuUltimo = 1;
     }
     conferir("ultimo provedor de legenda presente", viuUltimo, 1);
+  }
+
+  // Duas configuracoes do AIOStreams com o mesmo nome devem ser consultadas
+  // e aparecer como provedores separados na folha de fontes.
+  { AddonRemoto duas[2] = {0}, exportadas[2] = {0};
+    for (int i = 0; i < 2; i++) {
+      snprintf(duas[i].nome, sizeof duas[i].nome, "AIOStreams");
+      snprintf(duas[i].url, sizeof duas[i].url, "https://%s.test/manifest.json",
+               i ? "antigo" : "exemplo");
+      duas[i].ativo = 1;
+    }
+    conferir("duas instancias aplicadas", addons_definir_lista(duas, 2), 1);
+    for (int i = 0; i < 2; i++)
+      addons_manifesto_lido(i,
+        "{\"id\":\"com.aiostreams\",\"name\":\"AIOStreams\","
+        "\"resources\":[\"stream\"]}");
+    conferirTexto("primeira instancia", addons_nome(0), "AIOStreams (1)");
+    conferirTexto("segunda instancia", addons_nome(1), "AIOStreams (2)");
+    resp[0] = "{\"streams\":[{\"url\":\"https://x/1.mp4\"}]}";
+    resp[1] = "{\"streams\":[{\"url\":\"https://x/2.mp4\"}]}";
+    pedidosExemplo = pedidosAntigo = 0;
+    addons_buscar("tt9999999", "movie");
+    while (addons_estado() == ADD_BUSCANDO) usleep(1000);
+    conferir("primeira consultada", pedidosExemplo > 0, 1);
+    conferir("segunda consultada", pedidosAntigo > 0, 1);
+    conferir("duas fontes publicadas", fontesPublicadas, 2);
+    conferirTexto("fonte da primeira", nomesPublicados[0], "AIOStreams (1)");
+    conferirTexto("fonte da segunda", nomesPublicados[1], "AIOStreams (2)");
+    addons_exportar(exportadas, 2);
+    conferirTexto("nome da conta preservado", exportadas[1].nome, "AIOStreams");
+    // Uma instalacao pode nao ter este titulo. Ela continua consultada e a
+    // folha deve poder mostra-la como aba vazia pela lista de instalados.
+    resp[1] = "{\"streams\":[]}";
+    pedidosExemplo = pedidosAntigo = 0;
+    addons_buscar("tt8888888", "movie");
+    while (addons_estado() == ADD_BUSCANDO) usleep(1000);
+    conferir("primeira ainda consultada", pedidosExemplo > 0, 1);
+    conferir("segunda vazia ainda consultada", pedidosAntigo > 0, 1);
+    conferir("uma fonte publicada", fontesPublicadas, 1);
+    conferirTexto("segunda aba nomeada", addons_nome(1), "AIOStreams (2)");
   }
 
   // Configuracoes longas, como a do Comet, nao podem parar no byte 599.

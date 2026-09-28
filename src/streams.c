@@ -827,6 +827,22 @@ static void atualizarProvedores(void) {
     if(j==nProvedores && nProvedores<FONTES_PROVEDORES_MAX)
       snprintf(provedores[nProvedores++],96,"%s",nome);
   }
+  // A lista acima so contem addons que devolveram ao menos uma fonte valida.
+  // Duas instalacoes do AIOStreams podem existir e so uma responder para o
+  // titulo: manter ambas aqui permite selecionar a segunda e ver zero fontes,
+  // em vez de faze-la parecer desinstalada. Canais ao vivo consultam apenas
+  // o addon de origem, entao nao se adicionam as outras instalacoes ali.
+  { const char *tipo = addons_tipo_alvo();
+    if (!strcmp(tipo, "movie") || !strcmp(tipo, "series"))
+      for (int i=0; i<addons_n() && nProvedores<FONTES_PROVEDORES_MAX; i++) {
+        if (!addons_ativo(i) || !addons_fornece(i, ADD_STREAM)) continue;
+        const char *nome = addons_nome(i);
+        int j;
+        for (j=1; j<nProvedores; j++) if (!strcmp(provedores[j], nome)) break;
+        if (j==nProvedores)
+          snprintf(provedores[nProvedores++],96,"%s",nome);
+      }
+  }
   if(filtro>=nProvedores) filtro=0;
 }
 static float larguraAddon(int i) {
@@ -1281,7 +1297,9 @@ void stream_folha_desenhar(Uint32 agora) {
     // Ordem: torrent descartado por falta de debrid primeiro (se havia fonte,
     // "os addons nao tem" seria falso), depois o resumo da consulta.
     char causa[160], frase[320];
-    const char *s=n ? "Nenhuma fonte corresponde aos filtros."
+    const char *s=n ? (filtro && !tipoFiltro && !qualidadeFiltro
+                       ? i18n("Este add-on não trouxe fontes para este título.")
+                       : i18n("Nenhuma fonte corresponde aos filtros."))
                     : "Nenhuma fonte direta disponível. Use Recarregar para tentar novamente.";
     if (n==0) {
       int tem = 0;

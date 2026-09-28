@@ -38,6 +38,9 @@ typedef struct { char nome[64]; char url[ADD_URL_MAX]; int ativo; } AddonRemoto;
 // veio vazia, ou quando nada nela era utilizavel. Quem chama usa isso para
 // decidir se vale remontar o catalogo — e nao para saber quantos addons ha.
 int  addons_definir_lista(const AddonRemoto *lista, int n);
+// Tipo do titulo da busca de fontes em curso (movie, series, tv, channel).
+// A folha usa isto para mostrar as instalacoes de filme/serie mesmo sem fonte.
+const char *addons_tipo_alvo(void);
 
 // DE QUEM E A LISTA DE AGORA. O sync chama addons_marcar_da_conta(perfil) toda
 // vez que a resposta da conta para o perfil ATIVO foi aplicada — mudando a

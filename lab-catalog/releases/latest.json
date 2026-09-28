@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.17",
-  "body": "## Identidade e instalação\n- O Better Nuvio para LG webOS agora usa o ID com.betternuvio.app e o pacote com.betternuvio.app_1.5.17_arm.ipk. O serviço local de plugins acompanha esse novo ID.\n- A troca de ID faz o webOS instalar esta versão como outro aplicativo. Entre novamente na sua conta; os dados locais da instalação anterior não são copiados automaticamente. Depois de conferir que tudo funciona, você pode remover o aplicativo antigo pela TV.\n## Atualizações e contas\n- O app passa a consultar o catálogo e as notas em betternuvio.vercel.app. Os links do manifesto, do catálogo e da página de download apontam para este mesmo IPK.\n- O identificador público do Simkl permanece configurado. O segredo OAuth do Trakt continua no servidor e a chave Seekr é informada pelo usuário no dispositivo; nenhum dos dois é embutido no IPK.\n## Integridade do pacote\n- Pacote ARM recompilado e inspecionado: 51906958 bytes, SHA-256 51e73c1f47aef8fe65c830d2d59e2f9ea4c12f740be96c20ababfdcc488d032e.\n",
+  "tag_name": "v1.5.18",
+  "body": "## Busca e abertura de títulos\n- Ao escolher um resultado como “Monstros”, o detalhe abre imediatamente com a arte e as informações disponíveis; a resolução do identificador TMDB continua em segundo plano. Uma falha nessa consulta deixa de engolir o OK.\n- O clique do Magic Remote seleciona o cartaz sob o cursor antes de abrir. Se a lista da busca mudar entre o clique e a abertura, o app usa o índice e os dados atuais do título escolhido.\n## Fontes de add-ons\n- Duas instalações com o mesmo nome, como AIOStreams, aparecem separadas como “(1)” e “(2)”. O nome do manifesto não apaga o apelido configurado para cada instalação.\n- No seletor de filmes e séries, as instalações ativas continuam visíveis mesmo quando uma não devolve fontes para aquele título. Ao escolher uma aba vazia, a tela informa que aquele add-on não trouxe fontes. Cada URL continua sendo consultada separadamente.\n## Instalação e integridade\n- O IPK 1.5.18 mantém o ID com.betternuvio.app e atualiza a instalação 1.5.17 no mesmo app.\n- Pacote ARM verificado sem arquivos de conta, tokens, URLs pessoais de add-ons ou chaves privadas: 51907426 bytes; SHA-256 3ce88528821b0f58d1bd37d38e5cd54f92a40eb45f83f7a8f19f7804ccf3e282.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.17_arm.ipk",
-      "size": 51906958,
-      "digest": "sha256:51e73c1f47aef8fe65c830d2d59e2f9ea4c12f740be96c20ababfdcc488d032e",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.17_arm.ipk"
+      "name": "com.betternuvio.app_1.5.18_arm.ipk",
+      "size": 51907426,
+      "digest": "sha256:3ce88528821b0f58d1bd37d38e5cd54f92a40eb45f83f7a8f19f7804ccf3e282",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.18_arm.ipk"
     }
   ]
 }

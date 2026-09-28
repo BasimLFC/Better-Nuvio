@@ -17,6 +17,7 @@
 #include "discover.h"
 #include "buscasrec.h"
 #include "botoes.h"
+#include "ponteiro.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -115,6 +116,7 @@ static float velY = 0.0f, velX[BU_MAX_FILEIRAS];
 static float animCampo = 0.0f;
 static HomeItem itemFoco;
 static int   temItemFoco = 0;
+static GfxRect rectRes[BU_MAX_FILEIRAS][BU_MAX_POR_FIL];
 
 // Buscas recentes. focoRec vai de 0 a n (n = o "Limpar"). recRect/recLin sao
 // preenchidos pelo DESENHO (a largura de cada pilula depende do texto
@@ -447,6 +449,29 @@ int busca_item_focado(HomeItem *out) {
   if (painel == 3 || !temItemFoco || !out) return 0;
   *out = itemFoco;
   return 1;
+}
+
+// O Magic Remote muda o foco no evento de mouse, antes do proximo desenho.
+// Atualizar tambem o HomeItem aqui evita que o OK abra o card que estava
+// selecionado no quadro anterior quando o usuario clica em outro cartaz.
+static void ponteiroResultadoFocar(int r, int c) {
+  const CatItem *ci;
+  int idx;
+  if (r < 0 || r >= nFil || c < 0 || c >= fil[r].n) return;
+  idx = fil[r].itens[c];
+  ci = cat_item(idx);
+  if (!ci) return;
+  painel = 1;
+  focoRes.fileira = r;
+  focoRes.coluna = c;
+  focoRes.colunaLembrada[r] = c;
+  itemFoco.indice = idx;
+  itemFoco.rect = rectRes[r][c];
+  itemFoco.arte = ci->backdrop[0] ? ci->backdrop : ci->poster;
+  itemFoco.titulo = ci->titulo;
+  itemFoco.genero = ci->genero;
+  itemFoco.meta = ci->meta;
+  temItemFoco = 1;
 }
 
 void busca_evento(const SDL_Event *e) {
@@ -1054,6 +1079,16 @@ static void desenhaResultados(Uint32 agora) {
           itemFoco.meta   = ci->meta;
           temItemFoco = 1;
         }
+        rectRes[r][c] = poster;
+        // O card expandido pode ultrapassar o recorte dos resultados. O alvo
+        // do cursor cobre somente a parte que a pessoa realmente ve.
+        { float x0 = poster.x > BU_RES_X ? poster.x : BU_RES_X;
+          float y0 = poster.y > BU_RES_Y - 30.0f ? poster.y : BU_RES_Y - 30.0f;
+          float x1 = poster.x + poster.w < BU_DIR ? poster.x + poster.w : BU_DIR;
+          float limiteY = BU_RES_Y + BU_RES_AREA_H;
+          float y1 = poster.y + poster.h < limiteY ? poster.y + poster.h : limiteY;
+          ponteiro_alvo(x0, y0, x1 - x0, y1 - y0,
+                        ponteiroResultadoFocar, NULL, r, c); }
       }
   }
   gfx_sem_recorte();

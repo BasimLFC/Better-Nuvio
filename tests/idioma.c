@@ -30,6 +30,10 @@ int main(void) {
   confere("Quem está assistindo?", "Who's watching?");
   confere("Nenhuma fonte direta disponível. Use Recarregar para tentar novamente.",
           "No direct source available. Use Reload to try again.");
+  confere("Este add-on não trouxe fontes para este título.",
+          "This add-on returned no sources for this title.");
+  confere("Nenhuma fonte corresponde aos filtros.",
+          "No source matches the filters.");
   confere("Ficção científica", "Science Fiction");
   confere("Sáb", "Sat");
   confere("Mostrar \"Continuar assistindo\"", "Show \"Continue Watching\"");

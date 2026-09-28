@@ -375,18 +375,14 @@ static void abrirTitulo(const HomeItem *it) {
   // 20/09/2026: "tem titulos da busca que quando abre nao vem com as artes e
   // informacoes nenhuma"). O detalhe pede tudo ao Cinemeta por imdb, e
   // /meta/series/tmdb:456.json responde 404: sem temporadas, sem episodios,
-  // addons sem fonte. O vertudo ja resolvia esse id pelo caminho da
-  // filmografia (external_ids -> imdb -> meta); a busca e a home entravam por
-  // aqui e nao. Um so lugar para os dois: o titulo resolvido entra no catalogo
-  // e trocaDeTituloSeSolicitada abre ele.
+  // addons sem fonte. A resolucao pelo TMDB/Cinemeta continua em segundo
+  // plano, mas o detalhe abre ja com a arte do resultado. Se essa consulta
+  // falhar, o OK ainda precisa mostrar o titulo escolhido.
   c = cat_item(it->indice);
   if (c && !strncmp(c->imdb, "tmdb:", 5) && desc_chave_tmdb() &&
       desc_chave_tmdb()[0] && !desc_titulo_buscando()) {
-    // Sem chave do TMDB nao ha como resolver: abre como dava (arte e sinopse,
-    // sem episodios) em vez de nao abrir nada.
     desc_pedir_titulo_tmdb(atol(c->imdb + 5),
                            !strcmp(c->tipo, "series") ? "tv" : "movie");
-    return;
   }
   detail_abrir(it);
 }
@@ -1724,7 +1720,21 @@ void app_atualizar(float dt, Uint32 agora) {
         detail_pedir_reproduzir();
       }
     } else if (tela == TELA_BUSCA && busca_pediu_abrir(&idx)) {
-      if (busca_item_focado(&it)) abrirTitulo(&it); else abrirPorIndice(idx);
+      // A busca pode receber outra fileira do addon entre o OK e este quadro.
+      // O indice pedido e a escolha do usuario; o HomeItem do ultimo desenho
+      // serve apenas para animar a transicao quando ainda e o mesmo titulo.
+      if (busca_item_focado(&it) && it.indice == idx) {
+        const CatItem *c = cat_item(idx);
+        if (c) {
+          // Um novo lote remoto pode ter trocado o bloco do catalogo desde o
+          // desenho. Reaproveitar o retangulo, mas ler arte/textos atuais.
+          it.arte = c->backdrop[0] ? c->backdrop : c->poster;
+          it.titulo = c->titulo;
+          it.genero = c->genero;
+          it.meta = c->meta;
+          abrirTitulo(&it);
+        } else abrirPorIndice(idx);
+      } else abrirPorIndice(idx);
     } else if (tela == TELA_DESCOBRIR && discover_pediu_abrir(&idx)) {
       abrirPorIndice(idx);
     } else if (tela == TELA_BIBLIOTECA && biblioteca_pediu_abrir(&idx)) {

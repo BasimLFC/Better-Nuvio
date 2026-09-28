@@ -35,7 +35,7 @@
 // inicial. A diferenca importa na tela: "ainda nao sei" e diferente de "nao
 // fornece".
 static struct {
-  char nome[64]; char base[ADD_URL_MAX];
+  char nome[64], nomeBase[64]; char base[ADD_URL_MAX];
   // Alguns addons configuram a instancia pela query do manifesto. Ela deve
   // acompanhar /stream e /subtitles, depois do caminho do recurso.
   char query[ADD_URL_MAX];
@@ -48,9 +48,28 @@ static struct {
 } addon[ADD_MAX];
 static int nAddon;
 static unsigned versaoLista;   // ver addons_versao
+
+// Duas instalacoes configuradas do mesmo addon podem ter o mesmo nome no
+// manifesto, mas URLs e fontes diferentes. O nome que acompanha cada Stream
+// precisa ser unico; a folha de fontes usa esse nome como chave dos filtros.
+static void atualizarNomes(void) {
+  for (int i = 0; i < nAddon; i++) {
+    const char *base = addon[i].nomeBase[0] ? addon[i].nomeBase : "Addon";
+    int total = 0, ordem = 0;
+    for (int j = 0; j < nAddon; j++)
+      if (!strcmp(addon[j].nomeBase, base)) {
+        total++;
+        if (j <= i) ordem++;
+      }
+    if (total > 1)
+      snprintf(addon[i].nome, sizeof addon[i].nome, "%.56s (%d)", base, ordem);
+    else snprintf(addon[i].nome, sizeof addon[i].nome, "%s", base);
+  }
+}
 static _Atomic AddEstado estado = ADD_PARADO;
 static pthread_t fio;
 static char alvoId[64], alvoTipo[16];
+const char *addons_tipo_alvo(void) { return alvoTipo; }
 // BASE DO ADDON QUE PUBLICOU O ALVO, quando se sabe (canal vindo do guia).
 // Com ela, a consulta vai SO a esse addon. Vazia = todos, como sempre foi.
 //
@@ -182,12 +201,13 @@ int addons_carregar(const char *dirArte) {
     // nao deu relato porque a lista da conta chega logo depois e substitui a
     // do arquivo em quase todo aparelho; quem nao tem conta ficava sem nada.
     addon[nAddon].ativo = 1;
-    snprintf(addon[nAddon].nome, sizeof addon[nAddon].nome, "%s", linha);
+    snprintf(addon[nAddon].nomeBase, sizeof addon[nAddon].nomeBase, "%s", linha);
     baseNormalizada(tab + 1, addon[nAddon].base, sizeof addon[nAddon].base);
     queryDaUrl(tab + 1, addon[nAddon].query, sizeof addon[nAddon].query);
     nAddon++;
   }
   fclose(f);
+  atualizarNomes();
   { int f = 0, k;
     for (k = 0; k < nAddon; k++) f += addon[k].fonte;
     printf("[addons] %d configurados, %d fornecem stream\n", nAddon, f); }
@@ -246,7 +266,7 @@ int addons_definir_lista(const AddonRemoto *nova, int n) {
     // para aquele id, e quem consulta esse mapa sao as fontes das colecoes da
     // conta (colecoes.c): a pasta abria o catalogo de outro addon, ou nenhum.
     memset(&addon[aceitos], 0, sizeof addon[aceitos]);
-    snprintf(addon[aceitos].nome, sizeof addon[aceitos].nome, "%s",
+    snprintf(addon[aceitos].nomeBase, sizeof addon[aceitos].nomeBase, "%s",
              nova[i].nome[0] ? nova[i].nome : "Addon");
     baseNormalizada(nova[i].url, addon[aceitos].base, sizeof addon[aceitos].base);
     queryDaUrl(nova[i].url, addon[aceitos].query, sizeof addon[aceitos].query);
@@ -273,6 +293,7 @@ int addons_definir_lista(const AddonRemoto *nova, int n) {
     return 0;
   }
   nAddon = aceitos;
+  atualizarNomes();
   printf("[addons] %d vindos da conta\n", nAddon);
   // DIZER QUANDO CORTOU. Um addon que some sem uma linha de log e indistinguivel
   // de um addon que a conta nao tem.
@@ -288,7 +309,9 @@ int addons_definir_lista(const AddonRemoto *nova, int n) {
 int addons_exportar(AddonRemoto *saida, int max) {
   int i, k = 0;
   for (i = 0; i < nAddon && k < max; i++) {
-    snprintf(saida[k].nome, sizeof saida[k].nome, "%s", addon[i].nome);
+    // O sufixo "(1)/(2)" e so da interface; nao regravar esse nome gerado na
+    // conta, senao a proxima sincronizacao acumula apelidos artificiais.
+    snprintf(saida[k].nome, sizeof saida[k].nome, "%s", addon[i].nomeBase);
     // A conta guarda a URL do manifesto. Exportar apenas a base removia esse
     // sufixo e podia sobrescrever uma configuracao valida no proximo sync.
     if (snprintf(saida[k].url, sizeof saida[k].url, "%s/manifest.json%s",
@@ -730,7 +753,7 @@ int addons_adicionar(const char *nome, const char *urlManifest) {
     }
   }
   memset(&addon[nAddon], 0, sizeof addon[nAddon]);
-  snprintf(addon[nAddon].nome, sizeof addon[nAddon].nome, "%s",
+  snprintf(addon[nAddon].nomeBase, sizeof addon[nAddon].nomeBase, "%s",
            nome && *nome ? nome : nova);
   snprintf(addon[nAddon].base, sizeof addon[nAddon].base, "%s", nova);
   snprintf(addon[nAddon].query, sizeof addon[nAddon].query, "%s", query);
@@ -742,6 +765,7 @@ int addons_adicionar(const char *nome, const char *urlManifest) {
   addon[nAddon].sondado = 0;
   addon[nAddon].canalLido = 0; addon[nAddon].nCanal = 0;
   nAddon++;
+  atualizarNomes();
   versaoLista++;
   printf("[addons] instalado pelo guia: %s (%s)\n",
          addon[nAddon - 1].nome, nova);
@@ -791,8 +815,20 @@ static void capacidadesDoManifesto(int i, const char *corpo) {
   // de fileiras dos Ajustes e em qualquer lugar que mostre de onde a fileira
   // veio.
   { char nome[64];
-    if (js_texto_raiz(corpo, "name", nome, sizeof nome) && nome[0])
-      snprintf(addon[i].nome, sizeof addon[i].nome, "%s", nome); }
+    if (js_texto_raiz(corpo, "name", nome, sizeof nome) && nome[0]) {
+      size_t tam = strlen(nome);
+      // O apelido configurado pode distinguir duas instancias: "AIOStreams |
+      // Idioma Original" e "AIOStreams | PT-BR". O nome curto do manifesto
+      // nao deve apagar essa distincao. Nomes genericos ou incorretos, como
+      // o antigo "search", sao corrigidos pelo manifesto.
+      if (!addon[i].nomeBase[0] || !strcmp(addon[i].nomeBase, "Addon") ||
+          !strcmp(addon[i].nomeBase, "search") ||
+          strncmp(addon[i].nomeBase, nome, tam) ||
+          (addon[i].nomeBase[tam] && addon[i].nomeBase[tam] != ' ' &&
+           addon[i].nomeBase[tam] != '|'))
+        snprintf(addon[i].nomeBase, sizeof addon[i].nomeBase, "%s", nome);
+      atualizarNomes();
+    } }
   // CATALOGOS DE CANAL, antes do retorno cedo de "resources": um manifesto
   // sem resources legivel ainda declara catalogs[], e o guia precisa deles.
   { const char *p = js_array(corpo, NULL, "catalogs");
