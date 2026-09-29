@@ -79,15 +79,15 @@ int main(int argc, char **argv) {
     CONFERE(j != NULL, "release atual no catálogo");
     if (j) {
       CONFERE(textoJson(j, "tag_name", tag, sizeof tag), "tag da release atual");
-      CONFERE(!strcmp(tag, "v1.5.20"), "versão publicada: %s", tag);
+      CONFERE(!strcmp(tag, "v1.5.25"), "versão publicada: %s", tag);
       CONFERE(textoJson(j, "body", body, sizeof body), "body da release atual");
       limparNotas(body, notas, sizeof notas);
-      CONFERE(strstr(notas, "\001Temporadas e fontes de Monstros") != NULL, "seção de Monstros íntegra");
-      CONFERE(strstr(notas, "\001Catálogos com IDs próprios") != NULL, "seção de catálogos íntegra");
-      CONFERE(strstr(notas, "\001Instalação e verificação") != NULL, "última seção não foi cortada");
-      CONFERE(strstr(notas, "chaves privadas") != NULL, "último item não foi cortado");
+      CONFERE(strstr(notas, "\001Continuar assistindo e conta Nuvio") != NULL, "seção da conta íntegra");
+      CONFERE(strstr(notas, "\001Monstro: A História de Lizzie Borden") != NULL, "seção de Lizzie Borden íntegra");
+      CONFERE(strstr(notas, "\001Verificação") != NULL, "última seção não foi cortada");
+      CONFERE(strstr(notas, "Conta Nuvio") != NULL, "último item não foi cortado");
       CONFERE(acharIpk(j, url, sizeof url, hash, sizeof hash, AT_SUFIXO), "IPK da release atual encontrado");
-      CONFERE(strstr(url, "1.5.20_arm.ipk") != NULL, "URL do IPK atual: %s", url);
+      CONFERE(strstr(url, "1.5.25_arm.ipk") != NULL, "URL do IPK atual: %s", url);
       CONFERE(strlen(hash) == 64, "SHA-256 do IPK atual: %s", hash);
       free(j);
     } }

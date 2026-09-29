@@ -2480,15 +2480,39 @@ static int metaContinuarMonsterReserva(CatItem *it) {
   return 1;
 }
 
+// A conta pode trazer o episodio antes de qualquer colecao do arco carregar.
+// Mesmo sem resposta de /meta, a identidade da temporada basta para manter o
+// item visivel e abrir a serie principal no episodio certo. A arte chega na
+// proxima refacao quando o catalogo ou o metadado estiver disponivel.
+static int metaContinuarMonsterTemporada(CatItem *it) {
+  static const char *pt[] = {
+    "", "Monstro: A História de Jeffrey Dahmer", "Monstros: Irmãos Menendez",
+    "Monstro: A História de Ed Gein", "Monstro: A História de Lizzie Borden"
+  };
+  static const char *en[] = {
+    "", "Monster: The Jeffrey Dahmer Story", "Monsters: The Menendez Brothers",
+    "Monster: The Ed Gein Story", "Monster: The Lizzie Borden Story"
+  };
+  char id[24];
+  prog_content_id(id, sizeof id, it->imdb, NULL, NULL);
+  if (strcmp(id, "tt13207736") || it->temporada < 1 || it->temporada > 4)
+    return 0;
+  snprintf(it->titulo, sizeof it->titulo, "%s",
+           ajustes_idioma_ingles() ? en[it->temporada] : pt[it->temporada]);
+  return 1;
+}
+
 static void complementarContinuarDoCatalogo(CatItem *itens, int n,
                                              unsigned char *localizados) {
   for (int i = 0; i < n; i++) {
     if (metaContinuarDoCatalogo(&itens[i], 1)) {
       localizados[i] = 1;
-    } else if (!localizados[i] && metaContinuarDoCatalogo(&itens[i], 0)) {
-      localizados[i] = 1;
-    } else if (!localizados[i] && metaContinuarMonsterReserva(&itens[i])) {
-      localizados[i] = 1;
+    } else {
+      if (!localizados[i] && metaContinuarDoCatalogo(&itens[i], 0))
+        localizados[i] = 1;
+      if (!localizados[i] && metaContinuarMonsterReserva(&itens[i]))
+        localizados[i] = 1;
+      if (metaContinuarMonsterTemporada(&itens[i])) localizados[i] = 1;
     }
   }
 }

@@ -12,7 +12,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SP_MAX 240
+#define SP_MAX PROG_MAX
 #define PREFIXO_EPISODIO "__nuvio_episode__:"
 // O web nao sincroniza titulo com menos de um minuto (MIN_PROGRESS_SYNC_DURATION_MS).
 #define DUR_MINIMA_SEG 60.0
@@ -44,6 +44,12 @@ static long long lerInstanteMs(const char *p, const char *f) {
   return 0;
 }
 
+static int lerInteiroAlternativo(const char *p, const char *f,
+                                const char *principal, const char *alternativo) {
+  int v = (int)js_num(p, f, principal, -1);
+  return v >= 0 ? v : (int)js_num(p, f, alternativo, -1);
+}
+
 int syncprog_puxar(void) {
   Jsw w;
   char *r;
@@ -61,16 +67,26 @@ int syncprog_puxar(void) {
   for (p = js_raiz_array(r); p && k < SP_MAX; p = js_prox(js_fim(p))) {
     const char *f = js_fim(p);
     ProgRegistro *d = &caixa[k];
-    double pos, dur;
+    double pos, dur, legadoDur;
     char id[40];
-    if (!js_texto(p, f, "content_id", id, sizeof id) || !id[0]) continue;
-    // O web aceita position_ms/duration_ms e position/duration; os primeiros
-    // ganham quando existem, porque os segundos ja vem em milissegundos nesta
-    // RPC e misturar as duas unidades produz progresso de 100% em tudo.
+    if ((!js_texto(p, f, "content_id", id, sizeof id) || !id[0]) &&
+        (!js_texto(p, f, "contentId", id, sizeof id) || !id[0])) continue;
+    // O Nuvio aceita position_ms/duration_ms e position/duration. Os campos
+    // sem sufixo ja vieram em ms e, em linhas historicas, tambem em segundos.
     pos = js_num(p, f, "position_ms", -1.0);
     dur = js_num(p, f, "duration_ms", -1.0);
-    if (pos < 0) pos = js_num(p, f, "position", 0);
-    if (dur < 0) dur = js_num(p, f, "duration", 0);
+    legadoDur = js_num(p, f, "duration", 0);
+    if (pos < 0) {
+      pos = js_num(p, f, "position", 0);
+      // O Nuvio tambem le linhas historicas em segundos. Inferir a unidade
+      // pelo par inteiro, para nao transformar 30 s em 30 ms.
+      if (dur < 0 && legadoDur > 0 && legadoDur <= 8.0 * 60.0 * 60.0)
+        pos *= 1000.0;
+    }
+    if (dur < 0) {
+      dur = legadoDur;
+      if (dur > 0 && dur <= 8.0 * 60.0 * 60.0) dur *= 1000.0;
+    }
     pos /= 1000.0;
     dur /= 1000.0;
     if (dur <= 1.0) continue;
@@ -79,9 +95,15 @@ int syncprog_puxar(void) {
     // e aproveita temporada/episodio de la se as colunas nao vierem.
     { int tI = 0, eI = 0;
       prog_content_id(d->contentId, sizeof d->contentId, id, &tI, &eI);
-      d->temporada = (int)js_num(p, f, "season", -1);
-      d->episodio  = (int)js_num(p, f, "episode", -1);
-      if (d->episodio <= 0) { d->temporada = tI; d->episodio = eI; } }
+      d->temporada = lerInteiroAlternativo(p, f, "season", "season_number");
+      d->episodio  = lerInteiroAlternativo(p, f, "episode", "episode_number");
+      if (d->episodio <= 0) {
+        char video[72]; int tV = 0, eV = 0;
+        if (js_texto(p, f, "video_id", video, sizeof video) &&
+            sscanf(video, "__nuvio_episode__:%d:%d", &tV, &eV) == 2 && eV > 0) {
+          d->temporada = tV; d->episodio = eV;
+        } else { d->temporada = tI; d->episodio = eI; }
+      } }
     if (d->episodio <= 0) { d->temporada = 0; d->episodio = 0; }
     if (d->temporada < 0) d->temporada = 0;
     snprintf(d->tipo, sizeof d->tipo, "%s", d->episodio > 0 ? "series" : "movie");

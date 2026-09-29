@@ -123,7 +123,7 @@ static void pullAceitaOsFormatosDoServidor(void) {
     " {\"content_id\":\"tt7654321\",\"content_type\":\"movie\",\"season\":null,\"episode\":null,"
     "  \"position\":5400000,\"duration\":7200000,\"last_watched\":1757000150000},"
     " {\"content_id\":\"tt5550000:2:3\",\"position\":1000,\"duration\":100000,\"last_watched\":1757000150},"
-    " {\"content_id\":\"tt9990000\",\"position\":10,\"duration\":500}]";
+    " {\"content_id\":\"tt9990000\",\"position_ms\":10,\"duration_ms\":500}]";
   assert(syncprog_puxar() == 3);            // a de dur <= 1s fica de fora
   assert(!strcmp(ultimaFuncao, "sync_pull_watch_progress") && tem("\"p_profile_id\":1"));
   assert(syncprog_puxadas() == 3);
@@ -142,6 +142,25 @@ static void pullAceitaOsFormatosDoServidor(void) {
   assert(s.lastWatchedMs == 1757000150000LL);
   assert(!porChave("tt9990000").chave[0]);
   puts("ok  pull: ISO e numero, ms e s, id composto, retem sem catalogo");
+}
+
+static void pullEpisodioDoNuvioComCamposAlternativos(void) {
+  ProgRegistro s;
+  zerar();
+  proximaResposta =
+    "[{\"contentId\":\"tt13207736\",\"content_type\":\"series\","
+    "\"season_number\":4,\"episode_number\":2,"
+    "\"position_ms\":1200000,\"duration_ms\":3000000,"
+    "\"last_watched\":1757000150000},"
+    "{\"content_id\":\"tt13207736\",\"video_id\":\"__nuvio_episode__:4:3\","
+    "\"position\":1200,\"duration\":3000,\"last_watched\":1757000160000}]";
+  assert(syncprog_puxar() == 2);
+  assert(syncprog_aplicar(NULL) == 2);
+  s = porChave("tt13207736_s4e2");
+  assert(s.chave[0] && s.posSeg == 1200 && s.durSeg == 3000);
+  s = porChave("tt13207736_s4e3");
+  assert(s.chave[0] && s.posSeg == 1200 && s.durSeg == 3000);
+  puts("ok  pull: Lizzie Borden da conta conserva temporada/episodio e segundos antigos");
 }
 
 static void rollbackNaoAcontece(void) {
@@ -200,6 +219,7 @@ int main(void) {
   pushNoFormatoDoWeb();
   pushFalhoMantemPendente();
   pullAceitaOsFormatosDoServidor();
+  pullEpisodioDoNuvioComCamposAlternativos();
   rollbackNaoAcontece();
   migradoSobeComChaveCerta();
   puts("syncprog: tudo ok");

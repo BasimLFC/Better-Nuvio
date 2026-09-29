@@ -321,7 +321,9 @@ int main(void) {
     cat_definir_tudo(NULL, 0, NULL, 0);
     tabela = MONSTROS; nTabela = 1;
     fonteTeste = AJ_CWF_TRAKT;
-    assert(montarContinuar(lote, CONT_MAX, NULL) == 0);
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].imdb, "tt13207736:3:2"));
+    assert(strstr(lote[0].titulo, "Ed Gein"));
     cat_definir_tudo(arcos, 2, NULL, 0);
     assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
     assert(!strcmp(lote[0].imdb, "tt13207736:3:2"));
@@ -332,7 +334,7 @@ int main(void) {
     cat_definir_tudo(NULL, 0, NULL, 0);
     cinemetaMonster = 1;
     assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
-    assert(!strcmp(lote[0].titulo, "Monstros") && !strcmp(lote[0].poster, "monster.jpg"));
+    assert(strstr(lote[0].titulo, "Ed Gein") && !strcmp(lote[0].poster, "monster.jpg"));
     puts("ok  Monstros continua visivel apos reiniciar sem o card do arco");
     cinemetaMonster = 0;
     cat_definir_tudo(arcos, 2, NULL, 0);
@@ -353,6 +355,33 @@ int main(void) {
     assert(!strcmp(lote[0].imdb, "tt13207736:3:2"));
     assert(!strcmp(lote[0].titulo, "Monstro: Ed Gein"));
     puts("ok  progresso antigo pelo ID do arco entra no Continuar assistindo"); }
+  { CatItem lizzie = {0}, lote[CONT_MAX];
+    ProgRegistro remoto = {0};
+    prog_invalidar();
+    cat_definir_tudo(NULL, 0, NULL, 0);
+    cinemetaMonster = 0;
+    fonteTeste = AJ_CWF_CONTA;
+    snprintf(remoto.contentId, sizeof remoto.contentId, "tt13207736");
+    remoto.temporada = 4; remoto.episodio = 2;
+    remoto.posSeg = 1200; remoto.durSeg = 3000; remoto.lastWatchedMs = 990002;
+    assert(prog_aplicar_remoto(&remoto));
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].imdb, "tt13207736:4:2"));
+    assert(strstr(lote[0].titulo, "Lizzie Borden"));
+    assert(lote[0].progresso == 40);
+    puts("ok  Lizzie Borden da conta aparece mesmo antes do meta e do catalogo");
+
+    snprintf(lizzie.imdb, sizeof lizzie.imdb, "ttArcoLizzie");
+    snprintf(lizzie.imdbFonte, sizeof lizzie.imdbFonte, "tt13207736");
+    snprintf(lizzie.titulo, sizeof lizzie.titulo, "Monstro: A História de Lizzie Borden");
+    snprintf(lizzie.poster, sizeof lizzie.poster, "lizzie.jpg");
+    snprintf(lizzie.tipo, sizeof lizzie.tipo, "series");
+    lizzie.temporadaFonte = 4;
+    cat_definir_tudo(&lizzie, 1, NULL, 0);
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].poster, "lizzie.jpg"));
+    assert(!strcmp(lote[0].imdb, "tt13207736:4:2"));
+    puts("ok  Lizzie Borden ganha a arte do proprio arco ao carregar o catalogo"); }
   puts("cwordem_desc: tudo ok");
   return 0;
 }

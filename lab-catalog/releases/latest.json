@@ -1,12 +1,12 @@
 {
-  "tag_name": "v1.5.24",
-  "body": "## Legendas embutidas\n- As faixas de texto do MKV permanecem na legenda nativa da TV enquanto o app busca e prepara as falas. A troca para o visual Netflix Sans ocorre apenas depois que o trecho atual e os segundos seguintes já estão disponíveis no player. Isso evita tela sem legenda durante a leitura inicial.\n- Ao avançar ou voltar no vídeo, o app devolve temporariamente a faixa à TV se a nova posição ainda não foi extraída. Quando os cues dessa posição ficam prontos, o visual personalizado assume de novo, sem mostrar uma fala antiga como se fosse a atual.\n- A varredura de MKVs sem índice de legendas agora reconhece Clusters que trazem CRC ou Void antes do timestamp. O mesmo ajuste permite localizar esses Clusters após uma busca no vídeo.\n- ASS, SSA e SRT embutidos continuam usando o estilo Netflix Sans configurado no player. Legendas de imagem, como PGS, permanecem no renderizador nativo.\n## Verificação\n- Passaram os testes de extração em MKV com índice, MKV sem índice, seek com servidor Range lento, ASS/SRT e decodificação de legendas embutidas no Mac em MP4 e MKV. A suíte completa de MKV passou; o libass comparou 41 falas com diferença máxima de 0 ms. O aplicativo Mac e o IPK LG webOS foram compilados; a renderização final ainda precisa ser conferida em uma TV física.\n",
+  "tag_name": "v1.5.25",
+  "body": "## Continuar assistindo e conta Nuvio\n- A leitura do progresso sincronizado aceita os nomes alternativos de temporada e episódio usados por clientes Nuvio, inclusive o identificador sintético do vídeo quando as colunas do episódio não vêm preenchidas.\n- Registros antigos em segundos e atuais em milissegundos mantêm a posição correta. O lote de leitura passou a comportar até 480 entradas, a mesma capacidade do armazenamento local.\n## Monstro: A História de Lizzie Borden\n- O episódio da 4ª temporada permanece no Continuar assistindo com o título do arco, mesmo quando o catálogo ou o metadado do addon ainda não carregou. Ao receber o card da coleção, o app usa a arte desse arco e preserva temporada, episódio e porcentagem.\n- A correção também cobre as demais temporadas da antologia quando só a série principal está disponível na conta.\n## Verificação\n- Passaram os testes de sincronização de progresso e de montagem do Continuar assistindo, incluindo Lizzie Borden vinda da conta antes e depois do carregamento do catálogo. O aplicativo Mac e o IPK LG webOS foram compilados. A aparência final e o sincronismo com a conta real ainda dependem de conferência na TV.\n- Em Ajustes > Layout > Continuar assistindo, selecione “Ambas” ou “Conta Nuvio” para incluir o progresso da conta.\n",
   "assets": [
     {
-      "name": "com.betternuvio.app_1.5.24_arm.ipk",
-      "size": 52076384,
-      "digest": "sha256:9d82fd1e9d673a8bfed762931101c2b7ceb45f67801707faad5e227b034f75b2",
-      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.24_arm.ipk"
+      "name": "com.betternuvio.app_1.5.25_arm.ipk",
+      "size": 52079488,
+      "digest": "sha256:b36fd9a3982692cd0f41265bbe764dc0f4c903e48bc31ccc2fa8d32c1b5ac0af",
+      "browser_download_url": "https://betternuvio.vercel.app/com.betternuvio.app_1.5.25_arm.ipk"
     }
   ]
 }
