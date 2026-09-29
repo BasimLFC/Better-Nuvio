@@ -29,6 +29,11 @@
     li + li { margin-top: 12px; }
     footer { margin-top: 42px; color: #aaa4a6; font-size: .9rem; }
     footer a { color: #d9b566; }
+    .credits { margin-top: 28px; }
+    .credits p { margin: 0; color: #d2cdd0; line-height: 1.65; }
+    .credits p + p { margin-top: 14px; }
+    .credits a { color: #d9b566; text-underline-offset: .2em; }
+    .credits a:focus-visible { outline: 2px solid #f3d691; outline-offset: 3px; }
     @media (max-width: 690px) { .notes { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -53,6 +58,12 @@
       <p>SHA-256: <code>156fc1b37e27da0f677a41f4a0d40b088db3c37175ad3649bf91a70c875ddffe</code></p>
     </section>
     <div class="notes" id="notes" aria-live="polite"></div>
+    <section class="credits" aria-labelledby="credits-title">
+      <h2 id="credits-title">Créditos e agradecimentos</h2>
+      <p>Agradecimento especial a <a href="https://github.com/iqui27"><strong>iqui27</strong></a>, criador do <a href="https://github.com/iqui27/nuvio-native-legacy"><strong>Nuvio Native Legacy</strong></a>, pelo trabalho no cliente nativo para TVs e pelo código incorporado ao Better Nuvio.</p>
+      <p>O Better Nuvio combina essas contribuições com interface, integrações e adaptações de plataforma próprias.</p>
+      <p>Créditos também à <a href="https://github.com/NuvioMedia">NuvioMedia</a> pelo Nuvio e seu ecossistema original. Consulte os <a href="https://github.com/alenkpedro/better-nuvio/blob/main/NOTICE.md">avisos de atribuição</a>.</p>
+    </section>
     <footer>Para LG webOS, consulte o <a href="/webosbrew.manifest.json">manifesto</a> para conferir a versão e o SHA-256.</footer>
   </main>
   <script>
