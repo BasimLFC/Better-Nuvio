@@ -26,4 +26,8 @@ O player precisa dos arquivos locais `NetflixSans-Regular.otf` e `NetflixSans-Me
 
 ## Créditos
 
+Agradecimento especial a **[iqui27](https://github.com/iqui27)**, criador do **[Nuvio Native Legacy](https://github.com/iqui27/nuvio-native-legacy)**, pelo trabalho no cliente nativo para TVs e pelo código incorporado ao Better Nuvio. O projeto combina essas contribuições com interface, integrações e adaptações de plataforma próprias.
+
+Créditos também à **[NuvioMedia](https://github.com/NuvioMedia)** pelo Nuvio e seu ecossistema original.
+
 Os avisos de atribuição estão em [NOTICE.md](NOTICE.md). Better Nuvio é um projeto não oficial, sem afiliação com NuvioMedia. Consulte também as licenças de bibliotecas e fontes nos respectivos diretórios.
