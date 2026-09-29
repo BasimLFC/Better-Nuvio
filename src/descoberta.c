@@ -2135,9 +2135,15 @@ static int continuarLocal(CatItem *saida, int max) {
     CatItem *d;
     double p;
     int j, repetido = 0;
-    if (r->durSeg < 60.0) continue;
-    p = r->posSeg / r->durSeg;
-    if (p < 0.01 || p >= 0.90) continue;
+    if (r->durSeg <= 1.0) {
+      if (!(r->episodio > 0 && r->posSeg >= 60.0 &&
+            r->posSeg < 4.0 * 3600.0)) continue;
+      p = 0.01; // iniciado, mas a porcentagem so vem com o runtime do metadado
+    } else {
+      if (r->durSeg < 60.0) continue;
+      p = r->posSeg / r->durSeg;
+      if (p < 0.01 || p >= 0.90) continue;
+    }
     // Registros gravados antes do alias usavam o ID do card de cada arco.
     // Ao ler, reunimos esse progresso sob a serie principal e a temporada
     // correspondente, sem perder a posicao que a pessoa ja tinha.
@@ -2323,9 +2329,21 @@ static void *metaContinuarFio(void *arg) {
                  ano[0] && duracao[0] ? "  \xc2\xb7  " : "", duracao);
       if (duracao[0]) {
         int minutos = atoi(duracao);
-        if (minutos > 0)
-          it->restanteMin = it->progresso > 0
+        if (minutos > 0) {
+          int restanteEstimado = -1;
+          // O pull pode trazer posicao sem duracao. Estimar a barra pelo
+          // runtime do titulo; o player usa a posicao absoluta para retomar.
+          char chave[48]; ProgRegistro pr;
+          prog_chave(chave, sizeof chave, it->imdb, it->temporada, it->episodio);
+          if (prog_por_chave(chave, &pr) && pr.durSeg <= 1.0 && pr.posSeg > 0 &&
+              pr.posSeg < minutos * 60.0) {
+            int pct = (int)(100.0 * pr.posSeg / (minutos * 60.0));
+            it->progresso = pct < 1 ? 1 : pct > 89 ? 89 : pct;
+            restanteEstimado = (int)((minutos * 60.0 - pr.posSeg) / 60.0 + 0.5);
+          }
+          it->restanteMin = restanteEstimado >= 0 ? restanteEstimado : it->progresso > 0
             ? minutos - minutos * it->progresso / 100 : minutos;
+        }
       }
       snprintf(it->genero, sizeof it->genero, "%s",
                i18n(!strcmp(it->tipo, "series") ? "Programa de TV" : "Filme"));

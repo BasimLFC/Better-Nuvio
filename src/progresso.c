@@ -261,7 +261,9 @@ int prog_gravar_local(const char *imdb, int temporada, int episodio,
 int prog_aplicar_remoto(const ProgRegistro *rem) {
   ProgRegistro r;
   int i;
-  if (!rem || !rem->contentId[0] || rem->durSeg <= 1.0) return 0;
+  if (!rem || !rem->contentId[0] ||
+      (rem->durSeg <= 1.0 && !(rem->episodio > 0 && rem->posSeg >= 60.0 &&
+                               rem->posSeg < 4.0 * 3600.0))) return 0;
   r = *rem;
   r.perfil = perfis_ativo();
   r.pendente = 0;

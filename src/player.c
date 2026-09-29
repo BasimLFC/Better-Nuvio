@@ -24,6 +24,7 @@
 //      congelado sem saber o que houve.
 #include "player.h"
 #include "dados.h"
+#include "progresso.h"
 #include "trailer.h"
 #include "linguas.h"
 #include "idioma.h"
@@ -367,6 +368,7 @@ static int credAvisado, credFimAvisado;
 static double credAvisadoEm;
 static int introIdx=-1, introT=-1, introE=-1;
 static int retomadaAplicada, retomarPct;
+static double retomarSeg;
 // "Assistir do comeco" (issue #46): trava da sessao, armada por
 // player_do_inicio depois de player_abrir. Tem de sobreviver as CHAMADAS
 // REPETIDAS de player_definir_episodio — uma delas dispara quando o nome do
@@ -435,17 +437,24 @@ int  player_tem_video(void) { return comVideo; }
 // sessao ignora o ponto salvo, inclusive nas re-chamadas tardias de
 // player_definir_episodio. O progresso gravado NAO e apagado — comecar do
 // zero nao desmarca nada (mesma regra do web: startOver so pula o seek).
-void player_do_inicio(void) { semRetomada = 1; retomarPct = 0; }
+void player_do_inicio(void) { semRetomada = 1; retomarPct = 0; retomarSeg = 0; }
 static void zerarAtrasoLegenda(void);
 void player_definir_episodio(int t, int e) {
   const CatItem *c = item();
   int episodioAnteriorT = epT, episodioAnteriorE = epE;
   epT = t; epE = e; linhaEp[0] = 0;
   retomarPct = 0;
+  retomarSeg = 0;
   // !canalSessao: canal nao tem retomada, e se o indice ja foi remapeado o
   // "progresso" lido ali seria de outro titulo qualquer.
   if (c && !canalSessao && !semRetomada && c->progresso > 0 && c->progresso < 90 &&
       (strcmp(c->tipo,"series") || (t==c->temporada && e==c->episodio))) retomarPct=c->progresso;
+  if (retomarPct > 0 && c && t > 0 && e > 0) {
+    char chave[48]; ProgRegistro r;
+    prog_chave(chave, sizeof chave, cat_id_fonte(c), t, e);
+    if (prog_por_chave(chave, &r) && r.durSeg <= 1.0 && r.posSeg >= 60.0)
+      retomarSeg = r.posSeg;
+  }
   // FILME TAMBEM PEDE MARCADOR, e ate agora nao pedia: esta linha desligava o
   // modulo e voltava. Fazia sentido enquanto a fonte era o api.introdb.app, que
   // e indexado por episodio; o TheIntroDB responde por imdb sozinho e devolve os
@@ -2086,7 +2095,8 @@ void player_atualizar(float dt, Uint32 agora) {
     }
     if (!retomadaAplicada && video_pronto() && d>1.0) {
       retomadaAplicada=1;
-      if(retomarPct>0) video_buscar(d*retomarPct/100.0);
+      if (retomarSeg > 0 && retomarSeg < d - 30.0) video_buscar(retomarSeg);
+      else if(retomarPct>0) video_buscar(d*retomarPct/100.0);
     }
     tocando = video_tocando();
     relogio_amostra(&relLeg, video_pos(), monoSeg(), tocando && !scrubbing);

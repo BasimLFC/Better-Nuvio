@@ -89,7 +89,6 @@ int syncprog_puxar(void) {
     }
     pos /= 1000.0;
     dur /= 1000.0;
-    if (dur <= 1.0) continue;
     memset(d, 0, sizeof *d);
     // content_id pode vir composto de um cliente antigo ("tt123:4:9"): corta,
     // e aproveita temporada/episodio de la se as colunas nao vierem.
@@ -97,15 +96,32 @@ int syncprog_puxar(void) {
       prog_content_id(d->contentId, sizeof d->contentId, id, &tI, &eI);
       d->temporada = lerInteiroAlternativo(p, f, "season", "season_number");
       d->episodio  = lerInteiroAlternativo(p, f, "episode", "episode_number");
-      if (d->episodio <= 0) {
-        char video[72]; int tV = 0, eV = 0;
-        if (js_texto(p, f, "video_id", video, sizeof video) &&
-            sscanf(video, "__nuvio_episode__:%d:%d", &tV, &eV) == 2 && eV > 0) {
+      { char video[72] = "", idVideo[40] = "";
+        int tV = 0, eV = 0;
+        js_texto(p, f, "video_id", video, sizeof video);
+        prog_content_id(idVideo, sizeof idVideo, video, &tV, &eV);
+        // Alguns clientes salvam o card do arco como content_id (tmdb:...),
+        // mas o episodio reproduzido usa a serie principal no video_id.
+        // Este ultimo e a identidade que os addons aceitam para /meta e /stream.
+        if (tV >= 0 && eV > 0 && !strncmp(idVideo, "tt", 2) &&
+            strlen(idVideo) > 6 &&
+            strspn(idVideo + 2, "0123456789") == strlen(idVideo + 2) &&
+            strcmp(idVideo, d->contentId)) {
+          snprintf(d->contentId, sizeof d->contentId, "%s", idVideo);
           d->temporada = tV; d->episodio = eV;
-        } else { d->temporada = tI; d->episodio = eI; }
+        } else if (d->episodio <= 0) {
+          if (sscanf(video, "__nuvio_episode__:%d:%d", &tV, &eV) == 2 && eV > 0) {
+            d->temporada = tV; d->episodio = eV;
+          } else { d->temporada = tI; d->episodio = eI; }
+        }
       } }
     if (d->episodio <= 0) { d->temporada = 0; d->episodio = 0; }
     if (d->temporada < 0) d->temporada = 0;
+    // O Nuvio pode guardar um episodio pausado com posicao, mas sem duracao.
+    // Nao sabemos a porcentagem ate chegar o runtime do metadado; a posicao
+    // absoluta ainda permite retomar exatamente onde a pessoa parou.
+    if (dur <= 1.0 && !(d->episodio > 0 && pos >= 60.0 && pos < 4.0 * 3600.0))
+      continue;
     snprintf(d->tipo, sizeof d->tipo, "%s", d->episodio > 0 ? "series" : "movie");
     // A chave e SEMPRE recalculada, nunca copiada do servidor: uma linha antiga
     // escrita por este mesmo app trazia "tt123:4:9" em progress_key, e adotar

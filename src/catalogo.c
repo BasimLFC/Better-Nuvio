@@ -943,9 +943,16 @@ void cat_apontar_episodio(int indice, int temporada, int episodio) {
 
 void cat_aplicar_progresso(int indice, double posSeg, double durSeg, int temporada, int episodio) {
   indice = normalizarIndice(indice);
-  if (indice < 0 || durSeg <= 1.0) return;
-  itens[indice].progresso = (int)(100.0 * posSeg / durSeg);
-  itens[indice].restanteMin = (int)((durSeg - posSeg) / 60.0 + 0.5);
+  if (indice < 0) return;
+  if (durSeg <= 1.0) {
+    if (!(temporada > 0 && episodio > 0 && posSeg >= 60.0 &&
+          posSeg < 4.0 * 3600.0)) return;
+    itens[indice].progresso = 1;  // iniciado; porcentagem ainda desconhecida
+    itens[indice].restanteMin = 0;
+  } else {
+    itens[indice].progresso = (int)(100.0 * posSeg / durSeg);
+    itens[indice].restanteMin = (int)((durSeg - posSeg) / 60.0 + 0.5);
+  }
   cat_apontar_episodio(indice, temporada, episodio);
   mudou();
 }

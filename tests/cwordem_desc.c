@@ -98,6 +98,8 @@ char *rede_baixar(const char *u, int t)    {
   (void)t;
   if (cinemetaMonster && strstr(u, "v3-cinemeta.strem.io/meta/series/tt13207736.json"))
     return strdup("{\"meta\":{\"id\":\"tt13207736\",\"name\":\"Monster\",\"poster\":\"monster.jpg\"}}");
+  if (strstr(u, "metadata.test/meta/series/tt13207736.json"))
+    return strdup("{\"meta\":{\"id\":\"tt13207736\",\"name\":\"Monster\",\"poster\":\"monster.jpg\",\"runtime\":\"52 min\"}}");
   if (strstr(u, "metadata.test/meta/"))
     return strdup("{\"meta\":{\"name\":\"Título do addon\",\"description\":\"Sinopse do addon\",\"poster\":\"poster.png\"}}");
   return NULL;
@@ -381,7 +383,23 @@ int main(void) {
     assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
     assert(!strcmp(lote[0].poster, "lizzie.jpg"));
     assert(!strcmp(lote[0].imdb, "tt13207736:4:2"));
-    puts("ok  Lizzie Borden ganha a arte do proprio arco ao carregar o catalogo"); }
+    puts("ok  Lizzie Borden ganha a arte do proprio arco ao carregar o catalogo");
+
+    prog_invalidar();
+    cat_definir_tudo(NULL, 0, NULL, 0);
+    addonDisponivel = 1;
+    memset(&remoto, 0, sizeof remoto);
+    snprintf(remoto.contentId, sizeof remoto.contentId, "tt13207736");
+    remoto.temporada = 4; remoto.episodio = 1;
+    remoto.posSeg = 1440; remoto.durSeg = 0;
+    remoto.lastWatchedMs = 990003;
+    assert(prog_aplicar_remoto(&remoto));
+    assert(montarContinuar(lote, CONT_MAX, NULL) == 1);
+    assert(!strcmp(lote[0].imdb, "tt13207736:4:1"));
+    assert(strstr(lote[0].titulo, "Lizzie Borden"));
+    assert(lote[0].progresso == 46);
+    assert(lote[0].restanteMin == 28);
+    puts("ok  Lizzie Borden sem duracao entra no Continuar assistindo"); }
   puts("cwordem_desc: tudo ok");
   return 0;
 }

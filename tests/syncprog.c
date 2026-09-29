@@ -163,6 +163,25 @@ static void pullEpisodioDoNuvioComCamposAlternativos(void) {
   puts("ok  pull: Lizzie Borden da conta conserva temporada/episodio e segundos antigos");
 }
 
+static void pullArcoComPosicaoSemDuracao(void) {
+  ProgRegistro s;
+  zerar();
+  // Formato encontrado no app anterior: card do arco no content_id, episodio
+  // da serie principal no video_id. Valores de posicao e data sao sinteticos.
+  proximaResposta =
+    "[{\"content_id\":\"tmdb:299939\",\"content_type\":\"series\","
+    "\"season\":1,\"episode\":1,\"video_id\":\"tt13207736:4:1\","
+    "\"position\":1440000,\"duration\":0,\"last_watched\":1800000000000}]";
+  assert(syncprog_puxar() == 1);
+  assert(syncprog_aplicar(NULL) == 1);
+  s = porChave("tt13207736_s4e1");
+  assert(!strcmp(s.contentId, "tt13207736"));
+  assert(s.temporada == 4 && s.episodio == 1);
+  assert(s.posSeg == 1440.0 && s.durSeg == 0 && !s.pendente);
+  assert(!porChave("tmdb:299939_s1e1").chave[0]);
+  puts("ok  pull: arco de Lizzie Borden sem duracao conserva identidade e posicao");
+}
+
 static void rollbackNaoAcontece(void) {
   ProgRegistro s;
   zerar();
@@ -220,6 +239,7 @@ int main(void) {
   pushFalhoMantemPendente();
   pullAceitaOsFormatosDoServidor();
   pullEpisodioDoNuvioComCamposAlternativos();
+  pullArcoComPosicaoSemDuracao();
   rollbackNaoAcontece();
   migradoSobeComChaveCerta();
   puts("syncprog: tudo ok");
