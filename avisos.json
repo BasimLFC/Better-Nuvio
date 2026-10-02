@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-02-novidades-1543",
+    "desde": "2026-10-02",
+    "ate": "2026-10-20",
+    "plataforma": "lg",
+    "titulo": "1.5.43: legendas e miniaturas consertadas",
+    "titulo_en": "1.5.43: subtitles and thumbnails fixed",
+    "texto": "Legendas embutidas no MKV agora seguem o estilo do app. As miniaturas da timeline voltaram, sem precisar de chave. Ajustes, Addons e Plugins ganharam visual novo, e segurar OK mostra um anel de progresso. Atualize pelo Homebrew Channel ou em betternuvio.vercel.app.",
+    "texto_en": "Embedded MKV subtitles now follow the app style. Timeline thumbnails are back, no key needed. Settings, Addons and Plugins got a new look, and holding OK shows a progress ring. Update via Homebrew Channel or betternuvio.vercel.app."
+  },
+  {
     "id": "2026-09-28-credenciais-1516",
     "desde": "2026-09-28",
     "ate": "2026-10-15",
