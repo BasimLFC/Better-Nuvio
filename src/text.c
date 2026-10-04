@@ -615,11 +615,11 @@ int txt_iniciar(const char *dirRecursos, float escala) {
   // Largura 5, nao 4: a linha do arabe tem quatro candidatos mais o NULL, e o
   // laco abaixo para no NULL. Com [4] o terminador era descartado em silencio e
   // a busca do arabe seguia lendo a linha do cirilico.
-  { const char *cand[ESC_N][6] = {
+  { const char *cand[ESC_N][5] = {
       /* ESC_CJK          */ { "/usr/share/fonts/LG_Display_JP.ttf",
                                "/usr/share/fonts/DroidSansFallback.ttf",
                                "/System/Library/Fonts/Hiragino Sans GB.ttc", NULL },
-      /* ESC_ARABE        */ { "/system/fonts/NotoNaskhArabic-Regular.ttf", "/usr/share/fonts/DroidNaskh-Regular.ttf",
+      /* ESC_ARABE        */ { "/usr/share/fonts/DroidNaskh-Regular.ttf",
                                "/usr/share/fonts/LG_Display_Urdu.ttf",
                                "/System/Library/Fonts/Supplemental/GeezaPro.ttc",
                                "/System/Library/Fonts/Supplemental/Arial Unicode.ttf", NULL },
@@ -638,6 +638,20 @@ int txt_iniciar(const char *dirRecursos, float escala) {
       printf("reserva %s: %s\n", nomeEsc[e],
              caminhoReserva[e][0] ? caminhoReserva[e] : "nenhuma");
     } }
+
+  // Reserva de arabe embutida: funciona em qualquer plataforma mesmo sem
+  // fonte de sistema (LG sem DroidNaskh, Samsung WASM, Android). So e usada
+  // quando nenhum candidato de sistema foi encontrado acima.
+  if (!caminhoReserva[ESC_ARABE][0] && baseFontes[0]) {
+    char emb[512];
+    snprintf(emb, sizeof emb, "%sfonts/NotoNaskhArabic-Regular.ttf", baseFontes);
+    FILE *fe = fopen(emb, "rb");
+    if (fe) {
+      fclose(fe);
+      snprintf(caminhoReserva[ESC_ARABE], sizeof caminhoReserva[ESC_ARABE],
+               "%s", emb);
+    }
+  }
 
   marco("fontes: inicio");
   int candidatos[] = { fonteAppEscolhida, 0, 3, 4 };
