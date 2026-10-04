@@ -615,11 +615,11 @@ int txt_iniciar(const char *dirRecursos, float escala) {
   // Largura 5, nao 4: a linha do arabe tem quatro candidatos mais o NULL, e o
   // laco abaixo para no NULL. Com [4] o terminador era descartado em silencio e
   // a busca do arabe seguia lendo a linha do cirilico.
-  { const char *cand[ESC_N][5] = {
+  { const char *cand[ESC_N][6] = {
       /* ESC_CJK          */ { "/usr/share/fonts/LG_Display_JP.ttf",
                                "/usr/share/fonts/DroidSansFallback.ttf",
                                "/System/Library/Fonts/Hiragino Sans GB.ttc", NULL },
-      /* ESC_ARABE        */ { "/usr/share/fonts/DroidNaskh-Regular.ttf",
+      /* ESC_ARABE        */ { "/system/fonts/NotoNaskhArabic-Regular.ttf", "/usr/share/fonts/DroidNaskh-Regular.ttf",
                                "/usr/share/fonts/LG_Display_Urdu.ttf",
                                "/System/Library/Fonts/Supplemental/GeezaPro.ttc",
                                "/System/Library/Fonts/Supplemental/Arial Unicode.ttf", NULL },
